@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="PMEGP_Physical_V.MainPage"
+             NavigationPage.HasNavigationBar="False"
+             BackgroundColor="White">
+
+    <StackLayout VerticalOptions="CenterAndExpand"
+                 HorizontalOptions="CenterAndExpand"
+                 Spacing="20">
+
+        <!-- Logo -->
+        <Image Source="logo.jpg"
+               WidthRequest="120"
+               HeightRequest="120"
+               HorizontalOptions="Center"
+               VerticalOptions="Center" />
+
+        <!-- Title -->
+        <Label Text="PMEGP"
+               TextColor="Black"
+               FontSize="20"
+               FontAttributes="Bold"
+               HorizontalOptions="Center" />
+    </StackLayout>
+
+</ContentPage>

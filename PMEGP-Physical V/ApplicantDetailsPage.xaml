@@ -1,0 +1,470 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage x:Class="PMEGP_Physical_V.ApplicantDetailsPage"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             Title="Applicant Details"
+             BackgroundColor="White"
+             NavigationPage.HasNavigationBar="False">
+
+    <!-- Main Grid Layout -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header Section with Green Background -->
+        <Grid Grid.Row="0" 
+              BackgroundColor="#4CAF50" 
+              x:Name="HeaderGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Back Button -->
+            <Button Grid.Column="0"
+                    x:Name="BackButton"
+                    Text="‹"
+                    TextColor="White"
+                    BackgroundColor="Transparent"
+                    FontAttributes="Bold"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start"
+                    Clicked="OnBackButtonClicked" />
+
+            <!-- Header Title -->
+            <Label Grid.Column="1" 
+                   x:Name="HeaderTitle"
+                   Text="Applicant Details" 
+                   TextColor="White" 
+                   FontAttributes="Bold" 
+                   HorizontalOptions="Center"
+                   VerticalOptions="Center" />
+        </Grid>
+
+        <!-- Content Section -->
+        <ScrollView Grid.Row="1" BackgroundColor="#F5F5F5">
+            <Grid x:Name="MainContentGrid" Padding="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Loading Indicator -->
+                <ActivityIndicator x:Name="LoadingIndicator"
+                                   Grid.Row="0"
+                                   IsVisible="True"
+                                   IsRunning="True"
+                                   Color="#4CAF50"
+                                   VerticalOptions="Center"
+                                   HorizontalOptions="Center" />
+
+                <!-- Error Message -->
+                <StackLayout x:Name="ErrorLayout"
+                             Grid.Row="0"
+                             IsVisible="False"
+                             VerticalOptions="Center">
+                    <Label x:Name="ErrorLabel"
+                           Text=""
+                           TextColor="#F44336"
+                           HorizontalTextAlignment="Center" />
+                    <Button x:Name="RetryButton"
+                            Text="Retry"
+                            BackgroundColor="#4CAF50"
+                            TextColor="White"
+                            CornerRadius="5"
+                            HorizontalOptions="Center"
+                            Clicked="OnRetryButtonClicked" />
+                </StackLayout>
+
+                <!-- Main Content Layout -->
+                <StackLayout x:Name="ContentLayout" 
+                             Grid.Row="1"
+                             IsVisible="False"
+                             Spacing="0">
+
+                    <!-- Profile Header Card -->
+                    <Frame BackgroundColor="White"
+                           x:Name="ProfileHeaderFrame"
+                           CornerRadius="8"
+                           HasShadow="False"
+                           BorderColor="#E0E0E0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Dropdown Arrow -->
+                            <Button Grid.Column="0"
+                                    x:Name="DropdownButton"
+                                    Text="‹"
+                                    TextColor="#666666"
+                                    BackgroundColor="Transparent"
+                                    VerticalOptions="Center"
+                                    Rotation="270"
+                                    Clicked="OnDropdownClicked" />
+
+                            <!-- Profile Avatar -->
+                            <Frame Grid.Column="1"
+                                   x:Name="ProfileAvatarFrame"
+                                   BackgroundColor="#4CAF50"
+                                   HasShadow="False"
+                                   Padding="0"
+                                   VerticalOptions="Start">
+                                <Label x:Name="ProfileInitials"
+                                       Text="VP"
+                                       TextColor="White"
+                                       FontAttributes="Bold"
+                                       HorizontalOptions="Center"
+                                       VerticalOptions="Center" />
+                            </Frame>
+
+                            <!-- Name and ID -->
+                            <StackLayout Grid.Column="2" 
+                                         x:Name="NameStack"
+                                         VerticalOptions="Center">
+                                <Label x:Name="ApplicantNameLabel"
+                                       Text="Vikas Prajapati"
+                                       TextColor="Black"
+                                       FontAttributes="Bold"
+                                       LineBreakMode="TailTruncation" />
+                                <Label x:Name="ApplicantCodeLabel"
+                                       Text="KVMH-2025000043"
+                                       TextColor="#666666"
+                                       LineBreakMode="TailTruncation" />
+                            </StackLayout>
+                        </Grid>
+                    </Frame>
+
+                    <!-- Expandable Details Card -->
+                    <Frame x:Name="DetailsFrame"
+                           BackgroundColor="White"
+                           Padding="0"
+                           CornerRadius="8"
+                           HasShadow="False"
+                           BorderColor="#E0E0E0"
+                           IsVisible="True">
+
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <!-- Top Section with details and profile image -->
+                            <Grid Grid.Row="0" x:Name="DetailsGrid">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Left Side - All Details -->
+                                <StackLayout Grid.Column="0" x:Name="DetailsStack">
+                                    <!-- Aadhaar Card -->
+                                    <Grid x:Name="AadhaarGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="AadhaarTitleLabel"
+                                               Text="Aadhaar Card No:"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="AadhaarLabel"
+                                               Text="881951649084"
+                                               TextColor="#FF6B35"
+                                               FontAttributes="Bold"
+                                               VerticalOptions="Center"
+                                               LineBreakMode="TailTruncation" />
+                                    </Grid>
+
+                                    <!-- PAN No -->
+                                    <Grid x:Name="PanGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="PanTitleLabel"
+                                               Text="PAN No. :"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="PanLabel"
+                                               Text=""
+                                               TextColor="Black"
+                                               VerticalOptions="Center"
+                                               LineBreakMode="TailTruncation" />
+                                    </Grid>
+
+                                    <!-- Date of Birth -->
+                                    <Grid x:Name="DobGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="DobTitleLabel"
+                                               Text="Date of Birth:"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="DobLabel"
+                                               Text="01-01-0001"
+                                               TextColor="#FF6B35"
+                                               FontAttributes="Bold"
+                                               VerticalOptions="Center"
+                                               LineBreakMode="TailTruncation" />
+                                    </Grid>
+
+                                    <!-- Online Submission Date -->
+                                    <Grid x:Name="SubmissionGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="SubmissionTitleLabel"
+                                               Text="Online Submission Date:"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="SubmissionDateLabel"
+                                               Text=""
+                                               TextColor="Black"
+                                               VerticalOptions="Center"
+                                               LineBreakMode="TailTruncation" />
+                                    </Grid>
+
+                                    <!-- Gender -->
+                                    <Grid x:Name="GenderGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="GenderTitleLabel"
+                                               Text="Gender:"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="GenderLabel"
+                                               Text="Male"
+                                               TextColor="#FF6B35"
+                                               FontAttributes="Bold"
+                                               VerticalOptions="Center" />
+                                    </Grid>
+
+                                    <!-- Unit Location -->
+                                    <Grid x:Name="UnitLocationGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="UnitLocationTitleLabel"
+                                               Text="Unit Location:"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="UnitLocationLabel"
+                                               Text="Urban"
+                                               TextColor="#FF6B35"
+                                               FontAttributes="Bold"
+                                               VerticalOptions="Center" />
+                                    </Grid>
+
+                                    <!-- Category -->
+                                    <Grid x:Name="CategoryGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="CategoryTitleLabel"
+                                               Text="Category:"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="CategoryLabel"
+                                               Text="GEN"
+                                               TextColor="#FF6B35"
+                                               FontAttributes="Bold"
+                                               VerticalOptions="Center" />
+                                    </Grid>
+
+                                    <!-- Special Category -->
+                                    <Grid x:Name="SpecialCategoryGrid">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="SpecialCategoryTitleLabel"
+                                               Text="Special Category:"
+                                               TextColor="Black"
+                                               VerticalOptions="Start" />
+                                        <Label Grid.Column="1"
+                                               x:Name="SpecialCategoryLabel"
+                                               Text="Hill Border Region"
+                                               TextColor="#FF6B35"
+                                               FontAttributes="Bold"
+                                               VerticalOptions="Start"
+                                               LineBreakMode="WordWrap"
+                                               MaxLines="2" />
+                                    </Grid>
+
+                                    <!-- Mobile -->
+                                    <Grid x:Name="MobileGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="MobileTitleLabel"
+                                               Text="Mobile No:"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="MobileLabel"
+                                               Text="8619991865"
+                                               TextColor="#FF6B35"
+                                               FontAttributes="Bold"
+                                               VerticalOptions="Center" />
+                                    </Grid>
+
+                                    <!-- Email -->
+                                    <Grid x:Name="EmailGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="EmailTitleLabel"
+                                               Text="eMail:"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="EmailLabel"
+                                               Text="abhishek209@gmail.com"
+                                               TextColor="#FF6B35"
+                                               FontAttributes="Bold"
+                                               VerticalOptions="Center"
+                                               LineBreakMode="TailTruncation" />
+                                    </Grid>
+
+                                    <!-- Education -->
+                                    <Grid x:Name="EducationGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="EducationTitleLabel"
+                                               Text="Education:"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="EducationLabel"
+                                               Text=""
+                                               TextColor="Black"
+                                               VerticalOptions="Center"
+                                               LineBreakMode="TailTruncation" />
+                                    </Grid>
+
+                                    <!-- EDP Training -->
+                                    <Grid x:Name="EdpTrainingGrid">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Label Grid.Column="0"
+                                               x:Name="EdpTrainingTitleLabel"
+                                               Text="EDP Training:"
+                                               TextColor="Black"
+                                               VerticalOptions="Center" />
+                                        <Label Grid.Column="1"
+                                               x:Name="EdpTrainingLabel"
+                                               Text="DONE"
+                                               TextColor="#FF6B35"
+                                               FontAttributes="Bold"
+                                               VerticalOptions="Center" />
+                                    </Grid>
+                                </StackLayout>
+
+                                <!-- Right Side - Profile Image -->
+                                <Grid Grid.Column="1" x:Name="ImageContainer" HorizontalOptions="End" VerticalOptions="Start">
+                                    <Frame x:Name="ProfileImageFrame"
+                                           BackgroundColor="#E0E0E0"
+                                           HasShadow="False"
+                                           Padding="0">
+                                        <Grid>
+                                            <!-- Loading indicator for image -->
+                                            <ActivityIndicator x:Name="ImageLoadingIndicator"
+                                                               IsVisible="True"
+                                                               IsRunning="True"
+                                                               Color="#4CAF50"
+                                                               VerticalOptions="Center"
+                                                               HorizontalOptions="Center" />
+
+                                            <!-- Profile Image -->
+                                            <Image x:Name="ProfileImage"
+                                                   IsVisible="False"
+                                                   Aspect="AspectFill"
+                                                   VerticalOptions="Fill"
+                                                   HorizontalOptions="Fill" />
+
+                                            <!-- Fallback when image fails to load -->
+                                            <Label x:Name="ImageFallbackLabel"
+                                                   Text="No Image"
+                                                   TextColor="#666666"
+                                                   IsVisible="False"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center" />
+                                        </Grid>
+                                    </Frame>
+                                </Grid>
+                            </Grid>
+
+                            <!-- Action Buttons Section -->
+                            <Grid Grid.Row="1" x:Name="ButtonsGrid">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Bank Verification Button -->
+                                <Button Grid.Column="0"
+                                        x:Name="BankVerificationButton"
+                                        Text="Bank Verification"
+                                        BackgroundColor="#FF6B35"
+                                        TextColor="White"
+                                        FontAttributes="Bold"
+                                        CornerRadius="5"
+                                        Clicked="OnBankVerificationClicked" />
+
+                                <!-- Unit Verification Button -->
+                                <Button Grid.Column="1"
+                                        x:Name="UnitVerificationButton"
+                                        Text="Unit Verification"
+                                        BackgroundColor="#E0E0E0"
+                                        TextColor="Black"
+                                        FontAttributes="Bold"
+                                        CornerRadius="5"
+                                        Clicked="OnUnitVerificationClicked" />
+                            </Grid>
+                        </Grid>
+                    </Frame>
+                </StackLayout>
+            </Grid>
+        </ScrollView>
+    </Grid>
+</ContentPage>

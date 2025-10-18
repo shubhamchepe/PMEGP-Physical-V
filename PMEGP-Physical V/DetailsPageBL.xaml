@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage x:Class="PMEGP_Physical_V.DetailsPageBL"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             Title="Physical Verification"
+             BackgroundColor="White"
+             NavigationPage.HasNavigationBar="False">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header Section with Green Background -->
+        <Grid Grid.Row="0" 
+              BackgroundColor="#4CAF50" 
+              Padding="20,10,20,10"
+              MinimumHeightRequest="30">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Back Button -->
+            <Button x:Name="BackButton"
+                    Grid.Column="0"
+                    Text="‹"
+                    TextColor="White"
+                    BackgroundColor="Transparent"
+                    FontSize="24"
+                    FontAttributes="Bold"
+                    WidthRequest="40"
+                    HeightRequest="40"
+                    Margin="0,0,10,0"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start"
+                    Clicked="OnBackButtonClicked" />
+
+            <!-- Title Label -->
+            <Label Grid.Column="1"
+                   Text="Physical Verification" 
+                   TextColor="White" 
+                   FontSize="14" 
+                   FontAttributes="Bold" 
+                   HorizontalOptions="Start"
+                   VerticalOptions="Center" />
+        </Grid>
+
+        <!-- Search Bar Section -->
+        <Grid Grid.Row="1" 
+              BackgroundColor="#F5F5F5" 
+              Padding="0"
+              MinimumHeightRequest="50">
+            <Frame BackgroundColor="White"
+                   BorderColor="#E0E0E0"
+                   CornerRadius="2"
+                   Margin="0"
+                   HasShadow="False"
+                   Padding="0"
+                   HeightRequest="40">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Entry x:Name="SearchEntry"
+                           Grid.Column="0"
+                           Placeholder="Search by Applicant's Name"
+                           PlaceholderColor="#999999"
+                           TextColor="Black"
+                           FontSize="14"
+                           Margin="0"
+                           HeightRequest="30"
+                           VerticalOptions="Center"
+                           BackgroundColor="Transparent" />
+                    <Image Grid.Column="1" 
+                           Source="search.png"
+                           Aspect="AspectFit"
+                           WidthRequest="20"
+                           HeightRequest="20"
+                           Margin="8,0,8,0"
+                           VerticalOptions="Center"
+                           HorizontalOptions="Center" />
+                </Grid>
+            </Frame>
+        </Grid>
+
+        <!-- Applicants List with Light Green Background -->
+        <Frame Grid.Row="2" 
+               BackgroundColor="#E8F5E8" 
+               Padding="10,15,10,15"
+               CornerRadius="0"
+               HasShadow="False">
+            <ScrollView>
+                <Grid x:Name="ApplicantsContainer" 
+                      RowSpacing="12">
+                    <!-- Applicant cards will be generated dynamically by C# code -->
+                </Grid>
+            </ScrollView>
+        </Frame>
+    </Grid>
+</ContentPage>

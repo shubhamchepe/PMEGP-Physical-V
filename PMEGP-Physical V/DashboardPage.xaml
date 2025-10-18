@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage x:Class="PMEGP_Physical_V.DashboardPage"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             Title="Dashboard"
+             BackgroundColor="#F5F5F5"
+             NavigationPage.HasNavigationBar="False">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header Section -->
+        <Grid Grid.Row="0" Padding="12,4,12,4">
+            <Grid.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#056B39" Offset="0.0" />
+                    <GradientStop Color="#72C564" Offset="1.0" />
+                </LinearGradientBrush>
+            </Grid.Background>
+
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Label Grid.Column="0"
+                   Text="Home Page" 
+                   TextColor="White" 
+                   FontSize="16" 
+                   FontAttributes="Bold"
+                   VerticalOptions="Center" />
+
+            <ImageButton Grid.Column="1"
+                         x:Name="LogoutImageButton"
+                         Source="logoutw.png"
+                         BackgroundColor="Transparent"
+                         WidthRequest="35"
+                         HeightRequest="35"
+                         Clicked="OnLogoutClicked"
+                         VerticalOptions="Center"
+                         Aspect="AspectFit" />
+        </Grid>
+
+        <!-- Main Content -->
+        <ScrollView Grid.Row="1" BackgroundColor="#F5F5F5">
+            <StackLayout Spacing="0">
+
+                <!-- UserID Section -->
+                <StackLayout Padding="16,16,16,8" BackgroundColor="#F5F5F5">
+                    <StackLayout Orientation="Horizontal">
+                        <Label Text="UserID : " 
+                               TextColor="#333" 
+                               FontSize="18"
+                               VerticalOptions="Center" />
+                        <Label x:Name="UserIdLabel" 
+                               Text=" PONGP440022" 
+                               TextColor="#FF9800" 
+                               FontSize="18"
+                               FontAttributes="Bold"
+                               VerticalOptions="Center" />
+                    </StackLayout>
+                </StackLayout>
+
+                <!-- New Loan Section -->
+                <Border Stroke="Transparent"
+                        BackgroundColor="#CDE1D7"
+                        StrokeShape="RoundRectangle 8,8,0,0"
+                        Margin="16,8,16,16"
+                        Padding="16">
+                    <Label Text="New Loan"
+                           FontSize="18"
+                           FontAttributes="Bold"
+                           VerticalOptions="Center"
+                           TextColor="#333" />
+                </Border>
+
+                <!-- Dashboard Cards List - FIXED VERSION -->
+                <Border Margin="16,0,16,16" 
+                        Padding="16"
+                        BackgroundColor="#CDE1D7"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="Transparent">
+
+                    <CollectionView x:Name="DashboardCollectionView" 
+                                    ItemsSource="{Binding DashboardItems}"
+                                    SelectionMode="Single"
+                                    SelectionChanged="OnItemSelected"
+                                    BackgroundColor="Transparent"
+                                    InputTransparent="False">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout Orientation="Vertical"
+                                               ItemSpacing="12" />
+                        </CollectionView.ItemsLayout>
+
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border BackgroundColor="White"
+                                        Margin="0,4"
+                                        Padding="0"
+                                        StrokeShape="RoundRectangle 8"
+                                        Stroke="Transparent"
+                                        InputTransparent="False">
+
+                                    <Border.Shadow>
+                                        <Shadow Brush="Black"
+                                                Offset="0,2"
+                                                Radius="4"
+                                                Opacity="0.2" />
+                                    </Border.Shadow>
+
+                                    <Grid ColumnSpacing="0" 
+                                          RowSpacing="0"
+                                          InputTransparent="False">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="6" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Orange Left Border -->
+                                        <BoxView Grid.Column="0"
+                                                 Color="#FF9800"
+                                                 WidthRequest="6"
+                                                 HorizontalOptions="Start"
+                                                 VerticalOptions="FillAndExpand"
+                                                 InputTransparent="True" />
+
+                                        <!-- Content -->
+                                        <StackLayout Grid.Column="1"
+                                                     Padding="16,20"
+                                                     Spacing="8"
+                                                     InputTransparent="False">
+                                            <Label Text="{Binding Title}" 
+                                                   FontSize="16" 
+                                                   FontAttributes="Bold" 
+                                                   TextColor="#666"
+                                                   LineBreakMode="WordWrap"
+                                                   InputTransparent="True" />
+
+                                            <Label Text="{Binding Count}" 
+                                                   FontSize="32" 
+                                                   FontAttributes="Bold" 
+                                                   TextColor="#4CAF50"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center"
+                                                   InputTransparent="True" />
+                                        </StackLayout>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+
+                    </CollectionView>
+                </Border>
+
+            </StackLayout>
+        </ScrollView>
+
+    </Grid>
+</ContentPage>

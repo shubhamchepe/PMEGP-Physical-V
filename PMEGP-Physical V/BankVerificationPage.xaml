@@ -1,0 +1,336 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage x:Class="PMEGP_Physical_V.BankVerificationPage"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             Title="Bank Verification" 
+             BackgroundColor="White"
+             NavigationPage.HasNavigationBar="False">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header Section with Back Button -->
+        <Grid Grid.Row="0"
+      BackgroundColor="#4CAF50"
+      Padding="{OnPlatform iOS='10,40,10,10', Android='10,10,10,10'}"
+      MinimumHeightRequest="60">
+
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Button x:Name="BackButton"
+            Grid.Column="0"
+            Text="←"
+            FontSize="28"
+            TextColor="White"
+            BackgroundColor="Transparent"
+            VerticalOptions="Center"
+            HorizontalOptions="Start"
+            Padding="0"
+            Margin="0"
+            WidthRequest="50"
+            HeightRequest="50"
+            Clicked="OnBackButtonClicked" />
+
+            <Label Grid.Column="1"
+           Text="Bank Verification"
+           TextColor="White"
+           FontSize="20"
+           FontAttributes="Bold"
+           VerticalOptions="Center"
+           HorizontalOptions="Start"
+           Margin="10,0,0,0" />
+        </Grid>
+
+
+        <!-- Content Section -->
+        <ScrollView Grid.Row="1" BackgroundColor="#F5F5F5">
+            <StackLayout Padding="16" Spacing="16">
+
+                <!-- Loader -->
+                <ActivityIndicator x:Name="LoadingIndicator"
+                                   IsVisible="False"
+                                   IsRunning="False"
+                                   Color="#4CAF50"
+                                   Margin="0,20,0,20" />
+
+                <!-- Error -->
+                <Label x:Name="ErrorLabel"
+                       IsVisible="False"
+                       TextColor="Red"
+                       FontSize="14"
+                       Margin="0,10,0,10"
+                       HorizontalTextAlignment="Center" />
+
+                <!-- Content -->
+                <StackLayout x:Name="ContentContainer" IsVisible="True" Spacing="16">
+
+                    <!-- hidden entries -->
+                    <StackLayout IsVisible="False">
+                        <Entry x:Name="entryBalLoanReleased" />
+                        <Entry x:Name="entryROI" />
+                        <Entry x:Name="entryTDRAmount" />
+                        <Entry x:Name="entryTDRNumber" />
+                        <Label x:Name="labelTDRDate" />
+                        <Label x:Name="labelRepaymentRegular" />
+                        <Label x:Name="labelMMAmountWords" />
+                    </StackLayout>
+
+                    <!-- Bank Verification Block -->
+                    <Frame BackgroundColor="#E8F5E8"
+                           BorderColor="Transparent"
+                           CornerRadius="8"
+                           Padding="16"
+                           HasShadow="False">
+                        <StackLayout Spacing="20">
+                            <Label Text="Bank Verification"
+                                   FontSize="16"
+                                   FontAttributes="Bold"
+                                   TextColor="Black" />
+
+                            <!-- Margin Money -->
+                            <Grid>
+                                <Entry x:Name="entryMMAmount"
+                                       Text="324500.00"
+                                       FontSize="16"
+                                       TextColor="Black"
+                                       BackgroundColor="White"
+                                       IsReadOnly="True"
+                                       HeightRequest="64"
+                                       VerticalOptions="Center" />
+                                <Label Text="Margin Money Release Amount"
+                                       FontSize="12"
+                                       TextColor="#666666"
+                                       BackgroundColor="White"
+                                       Padding="4,0"
+                                       Margin="16,-8,0,0"
+                                       HorizontalOptions="Start"
+                                       VerticalOptions="Start" />
+                            </Grid>
+                            <Label Text="Rupeess Three Lakh Twenty Four Thousand Five Hundred Only"
+                                   FontSize="12"
+                                   TextColor="#666666" />
+
+                            <!-- First Installment Date -->
+                            <Grid>
+                                <Entry x:Name="entryFirstInstallmentDate"
+                                       Text="01-01-0001"
+                                       FontSize="16"
+                                       TextColor="Black"
+                                       BackgroundColor="White"
+                                       IsReadOnly="True"
+                                       HeightRequest="64"
+                                       VerticalOptions="Center" />
+                                <Label Text="First Installment Date"
+                                       FontSize="12"
+                                       TextColor="#666666"
+                                       BackgroundColor="White"
+                                       Padding="4,0"
+                                       Margin="16,-8,0,0"
+                                       HorizontalOptions="Start"
+                                       VerticalOptions="Start" />
+                                <Label Text="📅"
+                                       FontSize="16"
+                                       TextColor="#FF6B35"
+                                       VerticalOptions="Center"
+                                       HorizontalOptions="End"
+                                       Margin="0,0,16,0" />
+                            </Grid>
+
+                            <!-- Balance Loan -->
+                            <Grid>
+                                <Entry x:Name="entryBalLoanReleased2"
+                                       Text=""
+                                       FontSize="16"
+                                       TextColor="Black"
+                                       BackgroundColor="White"
+                                       IsReadOnly="True"
+                                       HeightRequest="64"
+                                       VerticalOptions="Center" />
+                                <Label Text="Bal. Loan to be rel. as on PV Date"
+                                       FontSize="12"
+                                       TextColor="#666666"
+                                       BackgroundColor="White"
+                                       Padding="4,0"
+                                       Margin="16,-8,0,0"
+                                       HorizontalOptions="Start"
+                                       VerticalOptions="Start" />
+                            </Grid>
+                            <Label Text="(Ideally shall be 0)"
+                                   FontSize="12"
+                                   TextColor="#FF6B35"
+                                   HorizontalOptions="End" />
+
+                            <!-- ROI -->
+                            <Grid>
+                                <Entry x:Name="entryROI2"
+                                       Text="9.5"
+                                       FontSize="16"
+                                       TextColor="Black"
+                                       BackgroundColor="White"
+                                       IsReadOnly="True"
+                                       HeightRequest="64"
+                                       VerticalOptions="Center" />
+                                <Label Text="Rate of Interest on Loan"
+                                       FontSize="12"
+                                       TextColor="#666666"
+                                       BackgroundColor="White"
+                                       Padding="4,0"
+                                       Margin="16,-8,0,0"
+                                       HorizontalOptions="Start"
+                                       VerticalOptions="Start" />
+                            </Grid>
+
+                            <!-- TDR/SRF Amount -->
+                            <Grid>
+                                <Entry x:Name="entryTDRAmount2"
+                                       Text="0.00"
+                                       FontSize="16"
+                                       TextColor="Black"
+                                       BackgroundColor="White"
+                                       IsReadOnly="True"
+                                       HeightRequest="64"
+                                       VerticalOptions="Center" />
+                                <Label Text="TDR/SRF Amount"
+                                       FontSize="12"
+                                       TextColor="#666666"
+                                       BackgroundColor="White"
+                                       Padding="4,0"
+                                       Margin="16,-8,0,0"
+                                       HorizontalOptions="Start"
+                                       VerticalOptions="Start" />
+                            </Grid>
+                            <Label Text="Rupeess Zero Only"
+                                   FontSize="12"
+                                   TextColor="#666666" />
+
+                            <!-- TDR/SRF Number -->
+                            <Grid>
+                                <Entry x:Name="entryTDRNumber2"
+                                       Text="123456789"
+                                       FontSize="16"
+                                       TextColor="Black"
+                                       BackgroundColor="White"
+                                       IsReadOnly="True"
+                                       HeightRequest="64"
+                                       VerticalOptions="Center" />
+                                <Label Text="TDR/SRF Number"
+                                       FontSize="12"
+                                       TextColor="#666666"
+                                       BackgroundColor="White"
+                                       Padding="4,0"
+                                       Margin="16,-8,0,0"
+                                       HorizontalOptions="Start"
+                                       VerticalOptions="Start" />
+                            </Grid>
+
+                            <!-- TDR/SRF Date -->
+                            <Grid>
+                                <Entry x:Name="entryTDRDate2"
+                                       Text="20-05-2025"
+                                       FontSize="16"
+                                       TextColor="Black"
+                                       BackgroundColor="White"
+                                       IsReadOnly="True"
+                                       HeightRequest="64"
+                                       VerticalOptions="Center" />
+                                <Label Text="TDR/SRF Date"
+                                       FontSize="12"
+                                       TextColor="#666666"
+                                       BackgroundColor="White"
+                                       Padding="4,0"
+                                       Margin="16,-8,0,0"
+                                       HorizontalOptions="Start"
+                                       VerticalOptions="Start" />
+                                <Label Text="📅"
+                                       FontSize="16"
+                                       TextColor="#FF6B35"
+                                       VerticalOptions="Center"
+                                       HorizontalOptions="End"
+                                       Margin="0,0,16,0" />
+                            </Grid>
+
+                            <!-- Repayment Regular -->
+                            <Grid>
+                                <Entry x:Name="entryRepaymentRegular2"
+                                       Text="Yes"
+                                       FontSize="16"
+                                       TextColor="Black"
+                                       BackgroundColor="White"
+                                       IsReadOnly="True"
+                                       HeightRequest="64"
+                                       VerticalOptions="Center" />
+                                <Label Text="Whether Repayment of Loan is regular?"
+                                       FontSize="12"
+                                       TextColor="#666666"
+                                       BackgroundColor="White"
+                                       Padding="4,0"
+                                       Margin="16,-8,0,0"
+                                       HorizontalOptions="Start"
+                                       VerticalOptions="Start" />
+                                <Label Text="▼"
+                                       FontSize="12"
+                                       TextColor="#666666"
+                                       VerticalOptions="Center"
+                                       HorizontalOptions="End"
+                                       Margin="0,0,16,0" />
+                            </Grid>
+
+                            <!-- NPA Period -->
+                            <Grid>
+                                <Entry x:Name="entryNPAPeriod"
+                                       Text=""
+                                       FontSize="16"
+                                       TextColor="Black"
+                                       BackgroundColor="White"
+                                       IsReadOnly="True"
+                                       HeightRequest="64"
+                                       VerticalOptions="Center" />
+                                <Label Text="NPA Period (Months)"
+                                       FontSize="12"
+                                       TextColor="#666666"
+                                       BackgroundColor="White"
+                                       Padding="4,0"
+                                       Margin="16,-8,0,0"
+                                       HorizontalOptions="Start"
+                                       VerticalOptions="Start" />
+                            </Grid>
+
+                        </StackLayout>
+                    </Frame>
+
+                    <!-- Toggles -->
+                    <StackLayout Orientation="Horizontal" Spacing="12">
+                        <Label Text="CGTMSE Coverage"
+                               FontSize="16"
+                               TextColor="#FF6B35"
+                               VerticalOptions="Center"
+                               HorizontalOptions="StartAndExpand" />
+                        <Switch x:Name="switchCGTMSE"
+                                OnColor="#4CAF50"
+                                ThumbColor="White"
+                                IsToggled="False" />
+                    </StackLayout>
+
+                    <StackLayout Orientation="Horizontal" Spacing="12">
+                        <Label Text="Collateral Security Obtained?"
+                               FontSize="16"
+                               TextColor="#FF6B35"
+                               VerticalOptions="Center"
+                               HorizontalOptions="StartAndExpand" />
+                        <Switch x:Name="switchCollateralSecurity"
+                                OnColor="#4CAF50"
+                                ThumbColor="White"
+                                IsToggled="False" />
+                    </StackLayout>
+
+                </StackLayout>
+            </StackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage x:Class="PMEGP_Physical_V.UnitVerificationPage"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             Title="Unit Verification"
+             BackgroundColor="#FAFAFA"
+             NavigationPage.HasNavigationBar="False">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Enhanced Header Section with Gradient Background -->
+        <Grid Grid.Row="0" 
+              BackgroundColor="#4CAF50" 
+              Padding="12,6,12,6"
+              MinimumHeightRequest="20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Back Button with Better Styling -->
+            <Button x:Name="BackButton"
+                    Grid.Column="0"
+                    Text="‹"
+                    TextColor="White"
+                    BackgroundColor="Transparent"
+                    FontSize="16"
+                    FontAttributes="Bold"
+                    
+                    Margin="0,0,15,0"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start"
+                    Clicked="OnBackButtonClicked" />
+
+            <!-- Enhanced Title with Icon -->
+            <StackLayout Grid.Column="1" 
+                        Orientation="Horizontal" 
+                        VerticalOptions="Center"
+                        Spacing="5">
+                
+                <Label Text="Unit Verification" 
+                       TextColor="White" 
+                       FontSize="15" 
+                       FontAttributes="Bold" 
+                       VerticalOptions="Center" />
+            </StackLayout>
+ 
+        </Grid>
+
+        <!-- Enhanced Step Navigation with Better Container -->
+        <!-- Simple Finger Scrollable Step Navigation -->
+        <Frame Grid.Row="1" 
+       BackgroundColor="White" 
+       Padding="0"
+       CornerRadius="0"
+       HasShadow="True"
+       BorderColor="#E0E0E0">
+
+            <!-- Step Navigation Container -->
+            <Frame BackgroundColor="#F8FFF8" 
+           Padding="8,4,8,4"        
+           CornerRadius="15"         
+           HasShadow="False"
+           BorderColor="Transparent"
+           HeightRequest="55">
+
+                <!-- This ScrollView enables finger scrolling on mobile -->
+                <ScrollView x:Name="StepScrollView"
+                    Orientation="Horizontal"
+                    HorizontalScrollBarVisibility="Never"
+                    VerticalScrollBarVisibility="Never"
+                    HorizontalOptions="FillAndExpand">
+
+                    <StackLayout x:Name="StepsContainer" 
+                       Orientation="Horizontal" 
+                       Spacing="0"
+                       HorizontalOptions="Start"
+                       VerticalOptions="Center">
+                        <!-- Steps will be generated dynamically -->
+                    </StackLayout>
+                </ScrollView>
+            </Frame>
+        </Frame>
+
+        <!-- Enhanced Main Content Area with Better Styling -->
+        <ScrollView Grid.Row="2" 
+                    BackgroundColor="#FAFAFA"
+                    Padding="0,0,0,20">
+
+            <!-- Main Content Container with Enhanced Shadow -->
+            <Frame BackgroundColor="White"
+                   CornerRadius="25"
+                   Margin="20,10,20,0"
+                   Padding="25,30,25,25"
+                   HasShadow="True"
+                   BorderColor="#E0E0E0">
+
+                <!-- Content Container for Different Steps -->
+                <StackLayout x:Name="ContentContainer" 
+                           Spacing="0">
+                    <!-- Content will be dynamically loaded based on selected step -->
+                </StackLayout>
+            </Frame>
+        </ScrollView>
+
+        <!-- Floating Action Button for Quick Actions (Optional) -->
+        <Frame x:Name="FloatingActionButton"
+               Grid.Row="2"
+               BackgroundColor="#FF6B35"
+               CornerRadius="30"
+               WidthRequest="60"
+               HeightRequest="60"
+               Padding="0"
+               HasShadow="True"
+               HorizontalOptions="End"
+               VerticalOptions="End"
+               Margin="0,0,30,30"
+               IsVisible="False">
+
+            <Button Text="💾"
+                    FontSize="24"
+                    BackgroundColor="Transparent"
+                    TextColor="White"
+                    CornerRadius="30"
+                    BorderWidth="0" />
+        </Frame>
+    </Grid>
+</ContentPage>

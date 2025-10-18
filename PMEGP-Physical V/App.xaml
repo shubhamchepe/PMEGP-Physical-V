@@ -1,0 +1,87 @@
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:PMEGP_Physical_V.Converters"
+             x:Class="PMEGP_Physical_V.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- ===== Base Colors ===== -->
+            <Color x:Key="Primary">#4CAF50</Color>
+            <Color x:Key="Secondary">#FF9800</Color>
+            <Color x:Key="Background">#F5F5F5</Color>
+            <Color x:Key="Surface">#FFFFFF</Color>
+            <Color x:Key="Error">#F44336</Color>
+
+            <!-- ===== Page Header Colors & Sizes ===== -->
+            <Color x:Key="HeaderGradientStart">#0E6A3A</Color>
+            <Color x:Key="HeaderGradientEnd">#27C24A</Color>
+            <x:Double x:Key="HeaderFontSize">22</x:Double>
+            <x:Double x:Key="HeaderHeight">100</x:Double>
+
+            <!-- ===== Card Settings ===== -->
+            <Color x:Key="CardBackground">#FFFFFF</Color>
+            <x:Double x:Key="CardCornerRadius">20</x:Double>
+            <Thickness x:Key="PageMargin">16</Thickness>
+            <Thickness x:Key="CardPadding">16</Thickness>
+
+            <!-- ===== Section Header ===== -->
+            <Color x:Key="MintHeaderBackground">#DCEEE6</Color>
+            <Color x:Key="MintHeaderText">#0E6A3A</Color>
+            <x:Double x:Key="SectionHeaderFontSize">20</x:Double>
+
+            <!-- ===== Custom Styles ===== -->
+            <Style TargetType="Frame" x:Key="CardStyle">
+                <Setter Property="BackgroundColor" Value="{StaticResource Surface}" />
+                <Setter Property="HasShadow" Value="True" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Padding" Value="16" />
+                <Setter Property="Margin" Value="8" />
+            </Style>
+
+            <Style TargetType="Button" x:Key="PrimaryButton">
+                <Setter Property="BackgroundColor" Value="{StaticResource Primary}" />
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="HeightRequest" Value="50" />
+                <Setter Property="FontAttributes" Value="Bold" />
+            </Style>
+
+            <Style TargetType="Entry" x:Key="StandardEntry">
+                <Setter Property="BackgroundColor" Value="{StaticResource Surface}" />
+                <Setter Property="HeightRequest" Value="50" />
+                <Setter Property="Margin" Value="0,8" />
+            </Style>
+
+            <Style x:Key="BorderlessEntry" TargetType="Entry">
+                <Setter Property="BackgroundColor" Value="Transparent" />
+                <Setter Property="Visual" Value="Material" />
+            </Style>
+
+            <!-- ===== Styles for UnitVerificationPage ===== -->
+            <Style x:Key="MenuItemStyle" TargetType="Frame">
+                <Setter Property="Padding" Value="10" />
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="HasShadow" Value="False" />
+                <Setter Property="WidthRequest" Value="50" />
+                <Setter Property="HeightRequest" Value="50" />
+            </Style>
+
+            <Style x:Key="NavButtonStyle" TargetType="Button">
+                <Setter Property="BackgroundColor" Value="#27C24A" />
+                <Setter Property="TextColor" Value="White" />
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="HeightRequest" Value="48" />
+                <Setter Property="FontAttributes" Value="Bold" />
+            </Style>
+
+            <!-- ===== Converters ===== -->
+            <converters:BoolToColorConverter x:Key="BoolToColorConverter" />
+            <converters:BoolToIconColorConverter x:Key="BoolToIconColorConverter" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
