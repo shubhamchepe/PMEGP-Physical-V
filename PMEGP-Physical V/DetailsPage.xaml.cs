@@ -360,8 +360,8 @@ namespace PMEGP_Physical_V
             }
 
             // Apply conditional icon paths
-            viewModel.DocumentsIconPath = data.IsUnitVerDone == true ? "docs_orange.png" : "docs_green.png";
-            viewModel.BriefcaseIconPath = data.IsBankVerDone == true ? "brief_orange.png" : "brief_green.png";
+            viewModel.DocumentsIconPath = data.IsUnitVerDone == true ? "docs_green.png" : "docs_orange.png";
+            viewModel.BriefcaseIconPath = data.IsBankVerDone == true ? "brief_green.png" : "brief_orange.png";
 
             return viewModel;
         }
@@ -454,15 +454,26 @@ namespace PMEGP_Physical_V
 
         private async Task LoadDataAsync(string userName, string status)
         {
-            await _viewModel.LoadDataAsync(userName, status);
+            // ✨ NEW: Show loader before fetching data
+            ShowLoader();
 
-            if (!_viewModel.IsLoading && string.IsNullOrEmpty(_viewModel.ErrorMessage))
+            try
             {
-                DisplayApplicants(_viewModel.FilteredApplicants.ToList());
+                await _viewModel.LoadDataAsync(userName, status);
+
+                if (!_viewModel.IsLoading && string.IsNullOrEmpty(_viewModel.ErrorMessage))
+                {
+                    DisplayApplicants(_viewModel.FilteredApplicants.ToList());
+                }
+                else if (!string.IsNullOrEmpty(_viewModel.ErrorMessage))
+                {
+                    await DisplayAlert("Error", _viewModel.ErrorMessage, "OK");
+                }
             }
-            else if (!string.IsNullOrEmpty(_viewModel.ErrorMessage))
+            finally
             {
-                await DisplayAlert("Error", _viewModel.ErrorMessage, "OK");
+                // ✨ NEW: Always hide loader after data is loaded (success or failure)
+                HideLoader();
             }
         }
 
@@ -513,6 +524,26 @@ namespace PMEGP_Physical_V
             }
         }
 
+        private void ShowLoader()
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                LoadingOverlay.IsVisible = true;
+                LoadingSpinner.IsRunning = true;
+                ApplicantsContainer.IsVisible = false;
+            });
+        }
+
+        private void HideLoader()
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                LoadingOverlay.IsVisible = false;
+                LoadingSpinner.IsRunning = false;
+                ApplicantsContainer.IsVisible = true;
+            });
+        }
+
         private double GetResponsiveFontSize(double baseSize) => baseSize * scaleFactor;
         private double GetResponsiveSpacing(double baseSpacing) => baseSpacing * scaleFactor;
         private Thickness GetResponsivePadding(double basePadding) => new Thickness(basePadding * scaleFactor);
@@ -520,6 +551,9 @@ namespace PMEGP_Physical_V
 
         private void DisplayApplicants(List<ApplicantViewModel> applicantsToShow)
         {
+            // ✨ NEW: Ensure container is visible when displaying applicants
+            ApplicantsContainer.IsVisible = true;
+
             if (ApplicantsContainer == null) return;
 
             ApplicantsContainer.Children.Clear();
@@ -832,8 +866,8 @@ namespace PMEGP_Physical_V
         {
             try
             {
-                // Navigate to BankVerificationPage with ApplID
-                var bankVerificationPage = new BankVerificationPage(applicant.ApplID);
+                // Navigate to BankVerificationPage with ApplID and Status
+                var bankVerificationPage = new BankVerificationPage(applicant.ApplID, applicant.Status);
                 await Navigation.PushAsync(bankVerificationPage);
             }
             catch (Exception ex)
@@ -964,8 +998,14 @@ namespace PMEGP_Physical_V
 
         private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
         {
+            // Show loader during search filtering
+            ShowLoader();
+
             _viewModel.SearchText = e.NewTextValue ?? "";
             DisplayApplicants(_viewModel.FilteredApplicants.ToList());
+
+            // Hide loader after filtering is complete
+            HideLoader();
         }
 
         protected override bool OnBackButtonPressed()

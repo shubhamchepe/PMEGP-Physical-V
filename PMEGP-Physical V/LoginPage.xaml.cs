@@ -9,6 +9,7 @@ public partial class LoginPage : ContentPage
     private readonly Random random = new Random();
     private readonly HttpClient httpClient;
 
+
     // Track which login type is currently selected
     private LoginType selectedLoginType = LoginType.UnitLogin;
 
@@ -163,6 +164,8 @@ public partial class LoginPage : ContentPage
 
                 if (response.Status)
                 {
+                    // ✨ NEW: Store the UserID that user entered
+                    response.UserID = UserIdEntry.Text.Trim();
                     // Successful login
                     await DisplayAlert("Success", response.Message ?? "Login successful!", "OK");
 
@@ -366,6 +369,7 @@ public partial class LoginPage : ContentPage
         // Bank Login specific fields
         public int BankLoginID { get; set; }
         public string? IFSC_Code { get; set; }
+        public string? UserID { get; set; }
 
         // Helper property to identify login type
         public bool IsBankLogin => !string.IsNullOrEmpty(IFSC_Code);

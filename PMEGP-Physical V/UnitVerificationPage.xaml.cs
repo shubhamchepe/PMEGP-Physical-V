@@ -654,7 +654,7 @@ namespace PMEGP_Physical_V
 
         private void LoadBeneficiaryContent()
         {
-            var titleFrame = CreateSectionTitle("Beneficiary", "👤");
+            var titleFrame = CreateSectionTitle("Beneficiary", "");
             ContentContainer.Children.Add(titleFrame);
 
             var form = new StackLayout { Spacing = 16 };
@@ -683,7 +683,7 @@ namespace PMEGP_Physical_V
 
         private void LoadUnitDetailContent()
         {
-            var titleFrame = CreateSectionTitle("Unit Detail", "🏭");
+            var titleFrame = CreateSectionTitle("Unit Detail", "");
             ContentContainer.Children.Add(titleFrame);
 
             var form = new StackLayout { Spacing = 16 };
@@ -903,7 +903,7 @@ namespace PMEGP_Physical_V
 
         private void LoadEDPTrainingContent()
         {
-            var titleFrame = CreateSectionTitle("EDP Training Detail", "🎓");
+            var titleFrame = CreateSectionTitle("EDP Training Detail", "");
             ContentContainer.Children.Add(titleFrame);
 
             var form = new StackLayout { Spacing = 16 };
@@ -929,7 +929,7 @@ namespace PMEGP_Physical_V
 
         private void LoadProjectDetailContent()
         {
-            var titleFrame = CreateSectionTitle("Project Detail", "📋");
+            var titleFrame = CreateSectionTitle("Project Detail", "");
             ContentContainer.Children.Add(titleFrame);
 
             var form = new StackLayout { Spacing = 16 };
@@ -987,7 +987,7 @@ namespace PMEGP_Physical_V
 
         private void LoadFinanceContent()
         {
-            var titleFrame = CreateSectionTitle("Finance Bank Detail", "💰");
+            var titleFrame = CreateSectionTitle("Finance Bank Detail", "");
             ContentContainer.Children.Add(titleFrame);
 
             var form = new StackLayout { Spacing = 16 };
@@ -1014,7 +1014,7 @@ namespace PMEGP_Physical_V
 
         private void LoadProductAndSalesContent()
         {
-            var titleFrame = CreateSectionTitle("Product And Sales", "📄");
+            var titleFrame = CreateSectionTitle("Product And Sales", "");
             ContentContainer.Children.Add(titleFrame);
 
             var form = new StackLayout { Spacing = 16 };
@@ -1057,7 +1057,7 @@ namespace PMEGP_Physical_V
 
         private void LoadEmploymentContent()
         {
-            var titleFrame = CreateSectionTitle("Employment Detail", "📊");
+            var titleFrame = CreateSectionTitle("Employment Detail", "");
             ContentContainer.Children.Add(titleFrame);
 
             var form = new StackLayout { Spacing = 16 };
@@ -1103,7 +1103,7 @@ namespace PMEGP_Physical_V
 
         private void LoadDocUploadContent()
         {
-            var titleFrame = CreateSectionTitle("Document Uploading", "📍");
+            var titleFrame = CreateSectionTitle("Document Uploading", "");
             ContentContainer.Children.Add(titleFrame);
 
             var form = new StackLayout { Spacing = 16 };
@@ -1420,7 +1420,7 @@ namespace PMEGP_Physical_V
 
         private void LoadVerificationContent()
         {
-            var titleFrame = CreateSectionTitle("Verification Details", "✅");
+            var titleFrame = CreateSectionTitle("Verification Details", "");
             ContentContainer.Children.Add(titleFrame);
 
             var form = new StackLayout { Spacing = 16 };
@@ -1480,15 +1480,15 @@ namespace PMEGP_Physical_V
             form.Children.Add(completionMessage);
 
             // Create collapsible summary sections with API data
-            form.Children.Add(CreateCollapsibleSection("Beneficiary", "👤", CreateBeneficiarySummary()));
-            form.Children.Add(CreateCollapsibleSection("Unit Detail", "🏭", CreateUnitDetailSummary()));
-            form.Children.Add(CreateCollapsibleSection("EDP Training Detail", "🎓", CreateEDPTrainingSummary()));
-            form.Children.Add(CreateCollapsibleSection("Project Detail", "📋", CreateProjectDetailSummary()));
-            form.Children.Add(CreateCollapsibleSection("Finance Bank Detail", "💰", CreateFinanceSummary()));
-            form.Children.Add(CreateCollapsibleSection("Product And Sales", "📄", CreateProductSalesSummary()));
-            form.Children.Add(CreateCollapsibleSection("Employment Detail", "📊", CreateEmploymentSummary()));
-            form.Children.Add(CreateCollapsibleSection("Document Uploading", "📍", CreateDocumentSummary()));
-            form.Children.Add(CreateCollapsibleSection("Verification Details", "✅", CreateVerificationSummary()));
+            form.Children.Add(CreateCollapsibleSection("Beneficiary", "", CreateBeneficiarySummary()));
+            form.Children.Add(CreateCollapsibleSection("Unit Detail", "", CreateUnitDetailSummary()));
+            form.Children.Add(CreateCollapsibleSection("EDP Training Detail", "", CreateEDPTrainingSummary()));
+            form.Children.Add(CreateCollapsibleSection("Project Detail", "", CreateProjectDetailSummary()));
+            form.Children.Add(CreateCollapsibleSection("Finance Bank Detail", "", CreateFinanceSummary()));
+            form.Children.Add(CreateCollapsibleSection("Product And Sales", "", CreateProductSalesSummary()));
+            form.Children.Add(CreateCollapsibleSection("Employment Detail", "", CreateEmploymentSummary()));
+            form.Children.Add(CreateCollapsibleSection("Document Uploading", "", CreateDocumentSummary()));
+            form.Children.Add(CreateCollapsibleSection("Verification Details", "", CreateVerificationSummary()));
 
             var previousButton = CreateNavigationButton("PREVIOUS", Color.FromArgb("#6C757D"), async () => await NavigateToStep(9));
             form.Children.Add(previousButton);

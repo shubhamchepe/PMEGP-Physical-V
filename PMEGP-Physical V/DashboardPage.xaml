@@ -158,5 +158,39 @@
             </StackLayout>
         </ScrollView>
 
+        <AbsoluteLayout x:Name="LoadingOverlay"
+                IsVisible="False"
+                Grid.RowSpan="2"
+                AbsoluteLayout.LayoutBounds="0,0,1,1"
+                AbsoluteLayout.LayoutFlags="All"
+                BackgroundColor="#80000000">
+
+            <Frame AbsoluteLayout.LayoutBounds="0.5,0.5,140,140"
+           AbsoluteLayout.LayoutFlags="PositionProportional"
+           BackgroundColor="White"
+           CornerRadius="20"
+           HasShadow="True"
+           Padding="20">
+
+                <StackLayout Spacing="15"
+                     HorizontalOptions="Center"
+                     VerticalOptions="Center">
+
+                    <ActivityIndicator x:Name="LoadingIndicator"
+                              IsRunning="False"
+                              Color="#FF6B35"
+                              WidthRequest="60"
+                              HeightRequest="60"
+                              HorizontalOptions="Center" />
+
+                    <Label Text="Loading..."
+                   FontSize="14"
+                   TextColor="#666666"
+                   FontAttributes="Bold"
+                   HorizontalOptions="Center" />
+                </StackLayout>
+            </Frame>
+        </AbsoluteLayout>
+
     </Grid>
 </ContentPage>

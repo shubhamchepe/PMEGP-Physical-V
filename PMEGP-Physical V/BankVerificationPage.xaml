@@ -256,29 +256,28 @@
                             </Grid>
 
                             <!-- Repayment Regular -->
+                            <!-- Repayment Regular -->
                             <Grid>
-                                <Entry x:Name="entryRepaymentRegular2"
-                                       Text="Yes"
-                                       FontSize="16"
-                                       TextColor="Black"
-                                       BackgroundColor="White"
-                                       IsReadOnly="True"
-                                       HeightRequest="64"
-                                       VerticalOptions="Center" />
+                                <Picker x:Name="pickerRepaymentRegular"
+            FontSize="16"
+            TextColor="Black"
+            BackgroundColor="White"
+            HeightRequest="64"
+            VerticalOptions="Center"
+            Title="">
+                                    <Picker.Items>
+                                        <x:String>Yes</x:String>
+                                        <x:String>No</x:String>
+                                    </Picker.Items>
+                                </Picker>
                                 <Label Text="Whether Repayment of Loan is regular?"
-                                       FontSize="12"
-                                       TextColor="#666666"
-                                       BackgroundColor="White"
-                                       Padding="4,0"
-                                       Margin="16,-8,0,0"
-                                       HorizontalOptions="Start"
-                                       VerticalOptions="Start" />
-                                <Label Text="▼"
-                                       FontSize="12"
-                                       TextColor="#666666"
-                                       VerticalOptions="Center"
-                                       HorizontalOptions="End"
-                                       Margin="0,0,16,0" />
+           FontSize="12"
+           TextColor="#666666"
+           BackgroundColor="White"
+           Padding="4,0"
+           Margin="16,-8,0,0"
+           HorizontalOptions="Start"
+           VerticalOptions="Start" />
                             </Grid>
 
                             <!-- NPA Period -->
@@ -328,6 +327,21 @@
                                 ThumbColor="White"
                                 IsToggled="False" />
                     </StackLayout>
+
+                    <!-- Save Button (Hidden by default, shown when editable) -->
+                    <Button x:Name="SaveButton"
+                            Text="SAVE"
+                            BackgroundColor="#4CAF50"
+                            TextColor="White"
+                            FontSize="16"
+                            FontAttributes="Bold"
+                            CornerRadius="8"
+                            HeightRequest="50"
+                            Margin="0,20,0,10"
+                            HorizontalOptions="Center"
+                            WidthRequest="200"
+                            IsVisible="False"
+                            Clicked="OnSaveButtonClicked" />
 
                 </StackLayout>
             </StackLayout>

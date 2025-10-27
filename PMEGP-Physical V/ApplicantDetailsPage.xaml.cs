@@ -580,8 +580,15 @@ namespace PMEGP_Physical_V
         {
             try
             {
-                // Navigate to BankVerificationPage and pass the applID
-                var bankVerificationPage = new BankVerificationPage(_applID);
+                // Determine status based on PhyVerificationModel
+                string status = "Pending"; // Default status
+
+                // You can derive this from your current data or pass a default
+                // Since ApplicantDetailsPage doesn't have access to the full applicant status,
+                // we'll pass "Pending" to make it editable by default
+
+                // Navigate to BankVerificationPage and pass the applID and status
+                var bankVerificationPage = new BankVerificationPage(_applID, status);
                 await Navigation.PushAsync(bankVerificationPage);
             }
             catch (Exception ex)

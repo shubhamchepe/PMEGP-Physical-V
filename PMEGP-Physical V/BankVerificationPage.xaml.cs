@@ -74,12 +74,15 @@ namespace PMEGP_Physical_V
     {
         private readonly HttpClient _httpClient;
         private readonly int _applID;
+        private readonly string _status;
         private const string API_URL = "https://115.124.125.153/MobileApp/GetApplDataForPV";
+        private const string SAVE_API_URL = "https://115.124.125.153/MobileApp/InsertBVData_PV";
 
-        public BankVerificationPage(int applID)
+        public BankVerificationPage(int applID, string status)
         {
             InitializeComponent();
             _applID = applID;
+            _status = status;
 
             // Initialize HTTP client with SSL bypass
             var handler = new HttpClientHandler
@@ -221,11 +224,12 @@ namespace PMEGP_Physical_V
                 entryTDRDate2.Text = tdrDate;
 
                 // Whether Repayment Regular
+                // Whether Repayment Regular
                 var repaymentText = !string.IsNullOrEmpty(apiResponse.PhyVerificationModel.WheReptRegular)
                     ? apiResponse.PhyVerificationModel.WheReptRegular
                     : "Yes";
                 labelRepaymentRegular.Text = repaymentText;
-                entryRepaymentRegular2.Text = repaymentText;
+                pickerRepaymentRegular.SelectedItem = repaymentText;
 
                 // NPA Period
                 entryNPAPeriod.Text = !string.IsNullOrEmpty(apiResponse.BankProcess.NPAPeriod)
@@ -251,6 +255,25 @@ namespace PMEGP_Physical_V
             {
                 ShowError($"Error mapping data to UI: {ex.Message}");
             }
+            // Set editability based on status
+            bool isEditable = _status != "Completed";
+
+            entryBalLoanReleased2.IsReadOnly = !isEditable;
+            entryBalLoanReleased2.IsEnabled = isEditable;
+            entryBalLoanReleased2.BackgroundColor = isEditable ? Colors.White : Color.FromArgb("#F8F8F8");
+
+            pickerRepaymentRegular.IsEnabled = isEditable;
+            pickerRepaymentRegular.BackgroundColor = isEditable ? Colors.White : Color.FromArgb("#F8F8F8");
+
+            entryNPAPeriod.IsReadOnly = !isEditable;
+            entryNPAPeriod.IsEnabled = isEditable;
+            entryNPAPeriod.BackgroundColor = isEditable ? Colors.White : Color.FromArgb("#F8F8F8");
+
+            switchCGTMSE.IsEnabled = isEditable;
+            switchCollateralSecurity.IsEnabled = isEditable;
+
+            // Show/hide save button based on editability
+            SaveButton.IsVisible = isEditable;
         }
 
         /// <summary>
@@ -318,6 +341,59 @@ namespace PMEGP_Physical_V
             ErrorLabel.Text = message;
             ErrorLabel.IsVisible = true;
             ContentContainer.IsVisible = false;
+        }
+
+        /// <summary>
+        /// Handle Save button click - POST data to API
+        /// </summary>
+        private async void OnSaveButtonClicked(object sender, EventArgs e)
+        {
+            try
+            {
+                // Show loading state
+                SaveButton.IsEnabled = false;
+                SaveButton.Text = "Saving...";
+
+                // Prepare payload
+                var payload = new
+                {
+                    ApplID = _applID,
+                    BalLnReleased = entryBalLoanReleased2.Text ?? "",
+                    WheReptRegular = pickerRepaymentRegular.SelectedItem?.ToString() ?? "Yes",
+                    IsCollSecuObt = switchCollateralSecurity.IsToggled ? 1 : 0,
+                    isBankVerDone = 1
+                };
+
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+                // Make POST request
+                var response = await _httpClient.PostAsync(SAVE_API_URL, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    await DisplayAlert("Success", "Bank verification data saved successfully", "OK");
+                    await Navigation.PopAsync();
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    throw new Exception($"HTTP Error: {response.StatusCode} - {errorContent}");
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                await DisplayAlert("Error", $"Network error: {ex.Message}", "OK");
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Failed to save data: {ex.Message}", "OK");
+            }
+            finally
+            {
+                SaveButton.IsEnabled = true;
+                SaveButton.Text = "SAVE";
+            }
         }
 
         protected override void OnDisappearing()

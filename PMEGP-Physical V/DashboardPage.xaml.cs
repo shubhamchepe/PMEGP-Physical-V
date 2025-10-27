@@ -92,7 +92,7 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
         }
         else
         {
-            UserIdLabel.Text = $"{_loginResponse.PhysicalVeriID}";
+            UserIdLabel.Text = $"{_loginResponse.UserID}";
         }
 
         // Set binding context
@@ -122,17 +122,8 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
 
         try
         {
-            // Show loading on UI thread
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                if (!_isDisposed)
-                {
-                    if (_loginResponse.IsBankLogin)
-                        UserIdLabel.Text = $"{_loginResponse.IFSC_Code} - Loading...";
-                    else
-                        UserIdLabel.Text = $"{_loginResponse.PhysicalVeriID} - Loading...";
-                }
-            });
+            // Show loading overlay - ADDED
+            ShowLoading();
 
             // Check login type and load appropriate data
             if (_loginResponse.IsBankLogin)
@@ -153,17 +144,7 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
                 }
             }
 
-            // Update UI to show loaded
-            MainThread.BeginInvokeOnMainThread(() =>
-            {
-                if (!_isDisposed)
-                {
-                    if (_loginResponse.IsBankLogin)
-                        UserIdLabel.Text = $"{_loginResponse.IFSC_Code}";
-                    else
-                        UserIdLabel.Text = $"{_loginResponse.PhysicalVeriID}";
-                }
-            });
+            // Update UI to show loaded - REMOVED the UserIdLabel update from here
         }
         catch (Exception ex)
         {
@@ -175,7 +156,32 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
         finally
         {
             _isLoading = false;
+            HideLoading(); // Hide loading overlay - ADDED
         }
+    }
+
+    private void ShowLoading()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (!_isDisposed)
+            {
+                LoadingOverlay.IsVisible = true;
+                LoadingIndicator.IsRunning = true;
+            }
+        });
+    }
+
+    private void HideLoading()
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (!_isDisposed)
+            {
+                LoadingOverlay.IsVisible = false;
+                LoadingIndicator.IsRunning = false;
+            }
+        });
     }
 
     private async Task FetchBankDataFromApiAsync()
@@ -331,6 +337,9 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
             Count = data.Completed,
             Category = "completed"
         });
+
+        // Update UserID label after data is loaded - ADDED
+        UserIdLabel.Text = $"{_loginResponse.IFSC_Code}";
     }
 
     private void MapUnitDataToDashboard(UnitDashboardData data)
@@ -374,6 +383,9 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
             Count = data.IsPendingCount,
             Category = "reports_pending"
         });
+
+        // Update UserID label after data is loaded - ADDED
+        UserIdLabel.Text = $"{_loginResponse.UserID}";
     }
 
     private void LoadDefaultUnitDashboardData()
@@ -422,6 +434,9 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
                 Count = 3,
                 Category = "non_traceable_unit"
             });
+
+            // Update UserID label after default data is loaded - ADDED
+            UserIdLabel.Text = $"{_loginResponse.PhysicalVeriID}";
         });
     }
 
