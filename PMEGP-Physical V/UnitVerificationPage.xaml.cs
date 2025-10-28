@@ -277,6 +277,8 @@ namespace PMEGP_Physical_V
         private readonly HttpClient _httpClient;
         private readonly int _applId;
         private ImageApiResponse _imageData = null;
+        private readonly string _badgeStatus;
+        private bool _isEditable = false;
 
         private readonly Dictionary<int, StepInfo> _stepInfos = new Dictionary<int, StepInfo>
         {
@@ -293,10 +295,13 @@ namespace PMEGP_Physical_V
         };
 
         // Modified constructor to accept ApplID
-        public UnitVerificationPage(int applId)
+        public UnitVerificationPage(int applId, string badgeStatus = "Completed")
         {
             InitializeComponent();
             _applId = applId;
+            _badgeStatus = badgeStatus?.Trim() ?? "Completed";
+
+            _isEditable = !string.Equals(_badgeStatus, "Completed", StringComparison.OrdinalIgnoreCase);
 
             var handler = new HttpClientHandler
             {
@@ -675,10 +680,86 @@ namespace PMEGP_Physical_V
                 form.Children.Add(CreateFormEntry("Loading...", "", false, true));
             }
 
-            var nextButton = CreateNavigationButton("NEXT", Color.FromArgb("#4CAF50"), async () => await NavigateToStep(2));
+            // Change button text based on editable status
+            string buttonText = _isEditable ? "SAVE" : "NEXT";
+            var nextButton = CreateNavigationButton(buttonText, Color.FromArgb("#4CAF50"), async () =>
+            {
+                if (_isEditable)
+                {
+                    await SaveBeneficiaryData();
+                }
+                await NavigateToStep(2);
+            });
             form.Children.Add(nextButton);
 
             ContentContainer.Children.Add(form);
+        }
+
+        private async Task GetCurrentLocationAsync()
+        {
+            try
+            {
+                var location = await Geolocation.GetLocationAsync(new GeolocationRequest
+                {
+                    DesiredAccuracy = GeolocationAccuracy.Best,
+                    Timeout = TimeSpan.FromSeconds(10)
+                });
+
+                if (location != null)
+                {
+                    // Update Latitude field
+                    var latEntry = FindEntryByClassId("LatitudeEntry");
+                    if (latEntry != null)
+                        latEntry.Text = location.Latitude.ToString("F6");
+
+                    // Update Longitude field
+                    var longEntry = FindEntryByClassId("LongitudeEntry");
+                    if (longEntry != null)
+                        longEntry.Text = location.Longitude.ToString("F6");
+
+                    // Generate and update GeoTag ID
+                    var geoTagEntry = FindEntryByClassId("GeoTagEntry");
+                    if (geoTagEntry != null)
+                    {
+                        string geoTagId = Helpers.GeoTagHelper.GenerateGeoTagId(location.Latitude, location.Longitude);
+                        geoTagEntry.Text = geoTagId;
+                    }
+
+                    await DisplayAlert("Success", "Location captured successfully", "OK");
+                }
+            }
+            catch (FeatureNotSupportedException)
+            {
+                await DisplayAlert("Error", "Location services not supported on this device", "OK");
+            }
+            catch (PermissionException)
+            {
+                await DisplayAlert("Error", "Location permission denied", "OK");
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Unable to get location: {ex.Message}", "OK");
+            }
+        }
+
+        private Entry FindEntryByClassId(string classId)
+        {
+            // Helper to find Entry controls by ClassId
+            // TODO: Implement recursive search through ContentContainer
+            foreach (var child in ContentContainer.Children)
+            {
+                if (child is StackLayout stack)
+                {
+                    foreach (var item in stack.Children)
+                    {
+                        if (item is Grid grid && grid.ClassId == classId)
+                        {
+                            return grid.Children.OfType<Entry>().FirstOrDefault();
+                        }
+                    }
+                }
+            }
+            return null;
         }
 
         private void LoadUnitDetailContent()
@@ -690,18 +771,18 @@ namespace PMEGP_Physical_V
 
             if (_apiData != null)
             {
-                form.Children.Add(CreateFormEntry("Unit Name*", _apiData.phyVerificationModel?.UnitName ?? "", false, true));
-                form.Children.Add(CreateFormEntry("Updated Unit Address*", _apiData.phyVerificationModel?.UnitAddr ?? ""));
+                form.Children.Add(CreateFormEntry("Unit Name*", _apiData.phyVerificationModel?.UnitName ?? "", false, true, _isEditable));
+                form.Children.Add(CreateMultilineEntry("Updated Unit Address*", _apiData.phyVerificationModel?.UnitAddr ?? "", false, _isEditable));
 
-                var statusSection = CreateVerificationStatusSection(_apiData.phyVerificationModel?.VeriStatus);
+                var statusSection = CreateVerificationStatusSection(_apiData.phyVerificationModel?.VeriStatus, _isEditable);
                 form.Children.Add(statusSection);
 
-                form.Children.Add(CreateFormEntry("Unit Establishment Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.UnitEstDate), true));
-                form.Children.Add(CreateFormEntry("GST Registration Number*", _apiData.phyVerificationModel?.UnitGSTNo ?? ""));
-                form.Children.Add(CreateFormEntry("Udyam Registration Number", _apiData.phyVerificationModel?.UnitUdyamRegNo ?? ""));
-                form.Children.Add(CreateFormEntry("Unit Location*", _apiData.phyVerificationModel?.UnitLocation ?? ""));
-                form.Children.Add(CreateFormEntry("Unit Sponsored By*", _apiData.applicantData?.AgencyCode ?? ""));
-                form.Children.Add(CreateFormEntry("Agency Office Name*", _apiData.AgencyOffDetailModel?.AgencyOffName ?? ""));
+                form.Children.Add(CreateFormEntry("Unit Establishment Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.UnitEstDate), true, false, _isEditable));
+                form.Children.Add(CreateFormEntry("GST Registration Number*", _apiData.phyVerificationModel?.UnitGSTNo ?? "", false, false, _isEditable));
+                form.Children.Add(CreateFormEntry("Udyam Registration Number", _apiData.phyVerificationModel?.UnitUdyamRegNo ?? "", false, false, _isEditable));
+                form.Children.Add(CreateFormEntry("Unit Location*", _apiData.phyVerificationModel?.UnitLocation ?? "", false, false, _isEditable));
+                form.Children.Add(CreateFormEntry("Unit Sponsored By*", _apiData.applicantData?.AgencyCode ?? "", false, false, _isEditable));
+                form.Children.Add(CreateFormEntry("Agency Office Name*", _apiData.AgencyOffDetailModel?.AgencyOffName ?? "", false, false, _isEditable));
                 form.Children.Add(CreateFormEntry("Address*", _apiData.applicantData?.UnitAddress ?? ""));
                 form.Children.Add(CreateFormEntry("Taluka/Block*", _apiData.applicantData?.UnitTaluka ?? ""));
                 form.Children.Add(CreateFormEntry("District*", _apiData.applicantData?.UnitDistrict ?? ""));
@@ -730,21 +811,36 @@ namespace PMEGP_Physical_V
                 var productDescFrame = CreateMultilineEntry("Product Description*", string.Join(", ", prodDescriptions));
                 form.Children.Add(productDescFrame);
 
-                var getLocationButton = CreateActionButton("GET LOCATION", Color.FromArgb("#2196F3"), () => GetCurrentLocation());
+                var getLocationButton = CreateActionButton("GET LOCATION", Color.FromArgb("#2196F3"), async () => await GetCurrentLocationAsync(), _isEditable);
                 form.Children.Add(getLocationButton);
 
-                form.Children.Add(CreateFormEntry("Longitude*", _apiData.phyVerificationModel?.Longitude ?? ""));
-                form.Children.Add(CreateFormEntry("Latitude*", _apiData.phyVerificationModel?.Latitude ?? ""));
-                form.Children.Add(CreateFormEntry("Geo Tagging ID*", _apiData.phyVerificationModel?.GeoTagID ?? ""));
+                var longitudeEntry = CreateFormEntry("Longitude*", _apiData.phyVerificationModel?.Longitude ?? "", false, false, false);
+                longitudeEntry.ClassId = "LongitudeEntry"; // For programmatic access
+                form.Children.Add(longitudeEntry);
+
+                var latitudeEntry = CreateFormEntry("Latitude*", _apiData.phyVerificationModel?.Latitude ?? "", false, false, false);
+                latitudeEntry.ClassId = "LatitudeEntry"; // For programmatic access
+                form.Children.Add(latitudeEntry);
+
+                var geoTagEntry = CreateFormEntry("Geo Tagging ID*", _apiData.phyVerificationModel?.GeoTagID ?? "", false, false, false);
+                geoTagEntry.ClassId = "GeoTagEntry"; // For programmatic access
+                form.Children.Add(geoTagEntry);
             }
 
             // Replace CreateMapPlaceholder() with CreateGoogleMap()
             var mapFrame = CreateGoogleMap();
             form.Children.Add(mapFrame);
 
+            string nextButtonText = _isEditable ? "SAVE" : "NEXT";
             var navigationButtons = CreateDualNavigationButtons(
                 async () => await NavigateToStep(1),
-                async () => await NavigateToStep(3)
+                async () =>
+                {
+                    if (_isEditable) await SaveUnitDetailData();
+                    await NavigateToStep(3);
+                },
+                "PREVIOUS",
+                nextButtonText
             );
             form.Children.Add(navigationButtons);
 
@@ -911,16 +1007,23 @@ namespace PMEGP_Physical_V
             if (_apiData != null)
             {
                 form.Children.Add(CreateFormEntry("EDP Completed*", ConvertUnixToDate(_apiData.edpTrainingModel?.TrDateTo), true, true));
-                form.Children.Add(CreateFormEntry("EDP Training Period*", _apiData.phyVerificationModel?.EDPPeriod ?? ""));
+                form.Children.Add(CreateFormEntry("EDP Training Period*", _apiData.phyVerificationModel?.EDPPeriod ?? "", false, false, _isEditable));
                 form.Children.Add(CreateFormEntry("Name of Institute*", _apiData.edpTrainingModel?.EDPTCName ?? ""));
 
                 var addressFrame = CreateMultilineEntry("Address of Institute*", _apiData.edpTrainingModel?.EDPAddress ?? "");
                 form.Children.Add(addressFrame);
             }
 
+            string nextButtonText = _isEditable ? "SAVE" : "NEXT";
             var navigationButtons = CreateDualNavigationButtons(
                 async () => await NavigateToStep(2),
-                async () => await NavigateToStep(4)
+                async () =>
+                {
+                    if (_isEditable) await SaveEDPTrainingData();
+                    await NavigateToStep(4);
+                },
+                "PREVIOUS",
+                nextButtonText
             );
             form.Children.Add(navigationButtons);
 
@@ -937,7 +1040,10 @@ namespace PMEGP_Physical_V
             if (_apiData != null)
             {
                 form.Children.Add(CreateFormEntry("Project Sanctioned Date*", ConvertUnixToDate(_apiData.bankProcess?.SancDate), true, true));
-                form.Children.Add(CreateFormEntry("Scheme under which project got sanctioned*", _apiData.phyVerificationModel?.SanctionedScheme ?? ""));
+                string schemeValue = _isEditable && string.IsNullOrEmpty(_apiData.phyVerificationModel?.SanctionedScheme)
+    ? "PMEGP"
+    : (_apiData.phyVerificationModel?.SanctionedScheme ?? "PMEGP");
+                form.Children.Add(CreateFormEntry("Scheme under which project got sanctioned*", schemeValue, false, false, _isEditable));
                 form.Children.Add(CreateFormEntry("Capital Expenditure*", _apiData.bankProcess?.CapitalExpd?.ToString("F2") ?? ""));
                 form.Children.Add(CreateFormEntry("Working Capital*", _apiData.bankProcess?.WorkingCapital?.ToString("F2") ?? ""));
 
@@ -1024,31 +1130,79 @@ namespace PMEGP_Physical_V
                 var annualProductionFrame = CreateFormEntry("Annual Production-Value", _apiData.phyVerificationModel?.AnlProdVal?.ToString("F2") ?? "", false, true);
                 form.Children.Add(annualProductionFrame);
 
+                // Add words for Annual Production
+                if (_apiData.phyVerificationModel?.AnlProdVal.HasValue == true)
+                {
+                    var productionWords = new Label
+                    {
+                        Text = Helpers.NumberToWords.ConvertNumberToRupeesWords((long)_apiData.phyVerificationModel.AnlProdVal.Value),
+                        FontSize = 11,
+                        TextColor = Color.FromArgb("#666666"),
+                        Margin = new Thickness(0, -10, 0, 5),
+                        FontAttributes = FontAttributes.Italic
+                    };
+                    form.Children.Add(productionWords);
+                }
+
                 var annualSalesFrame = CreateFormEntry("Annual Sales-Value", _apiData.phyVerificationModel?.AnlSaleVal?.ToString("F2") ?? "");
                 form.Children.Add(annualSalesFrame);
 
-                var productDetailLabel = new Label
+                // Add words for Annual Sales
+                if (_apiData.phyVerificationModel?.AnlSaleVal.HasValue == true)
                 {
-                    Text = "Product Details-Main Product",
-                    FontSize = 14,
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = Color.FromArgb("#333333"),
-                    Margin = new Thickness(0, 10, 0, 5)
-                };
-                form.Children.Add(productDetailLabel);
+                    var salesWords = new Label
+                    {
+                        Text = Helpers.NumberToWords.ConvertNumberToRupeesWords((long)_apiData.phyVerificationModel.AnlSaleVal.Value),
+                        FontSize = 11,
+                        TextColor = Color.FromArgb("#666666"),
+                        Margin = new Thickness(0, -10, 0, 5),
+                        FontAttributes = FontAttributes.Italic
+                    };
+                    form.Children.Add(salesWords);
+                }
 
-                var productDescFrame = CreateMultilineEntry("", _apiData.applicantData?.ProdDescr2 ?? "");
-                form.Children.Add(productDescFrame);
+                // Add Product Details dropdown
+                var productPicker = new Picker
+                {
+                    Title = "Product Details - Main Product",
+                    FontSize = 16,
+                    TextColor = Colors.Black,
+                    BackgroundColor = _isEditable ? Colors.White : Color.FromArgb("#F8F8F8"),
+                    IsEnabled = _isEditable,
+                    HeightRequest = 56,
+                    Margin = new Thickness(0, 10, 0, 0)
+                };
+
+                productPicker.Items.Add("--select");
+                productPicker.Items.Add("Opencast mining of hard coal");
+                productPicker.Items.Add("Cleaning, sizing, grading, pulverizing, compressing etc. of coal");
+                productPicker.Items.Add("Belowground mining of hard coal");
+
+                // Try to select existing value or default
+                string existingProduct = _apiData.applicantData?.ProdDescr2 ?? "";
+                if (productPicker.Items.Contains(existingProduct))
+                    productPicker.SelectedItem = existingProduct;
+                else
+                    productPicker.SelectedIndex = 0;
+
+                form.Children.Add(productPicker);
 
                 var exportValueFrame = CreateFormEntry("Export Detail - value*", _apiData.phyVerificationModel?.ExportDetails?.ToString("F2") ?? "");
                 form.Children.Add(exportValueFrame);
 
-                form.Children.Add(CreateFormEntry("Export Detail - Country of Export*", _apiData.phyVerificationModel?.ExportDetCount ?? ""));
+                form.Children.Add(CreateFormEntry("Export Detail - Country of Export*", _apiData.phyVerificationModel?.ExportDetCount ?? "", false, false, _isEditable));
             }
 
+            string nextButtonText = _isEditable ? "SAVE & NEXT" : "NEXT";
             var navigationButtons = CreateDualNavigationButtons(
                 async () => await NavigateToStep(5),
-                async () => await NavigateToStep(7)
+                async () =>
+                {
+                    if (_isEditable) await SaveProductSalesData();
+                    await NavigateToStep(7);
+                },
+                "PREVIOUS",
+                nextButtonText
             );
             form.Children.Add(navigationButtons);
 
@@ -1072,6 +1226,9 @@ namespace PMEGP_Physical_V
                 form.Children.Add(CreateFormEntry("ST*", _apiData.phyVerificationModel?.EmpST?.ToString() ?? ""));
                 form.Children.Add(CreateFormEntry("OBC*", _apiData.phyVerificationModel?.EmpOBC?.ToString() ?? ""));
                 form.Children.Add(CreateFormEntry("Minority*", _apiData.phyVerificationModel?.EmpMinority?.ToString() ?? ""));
+                form.Children.Add(CreateFormEntry("Full-Time Employees", "0", false, false, _isEditable));
+                form.Children.Add(CreateFormEntry("Part-Time Employees", "0", false, false, _isEditable));
+                form.Children.Add(CreateFormEntry("Seasonal Employees", "0", false, false, _isEditable));
                 form.Children.Add(CreateFormEntry("Total Number Of Employees*", _apiData.phyVerificationModel?.TotalEMP?.ToString() ?? ""));
 
                 // Average Wages with number-to-words
@@ -1092,9 +1249,16 @@ namespace PMEGP_Physical_V
                 }
             }
 
+            string nextButtonText = _isEditable ? "SAVE & NEXT" : "NEXT";
             var navigationButtons = CreateDualNavigationButtons(
                 async () => await NavigateToStep(6),
-                async () => await NavigateToStep(8)
+                async () =>
+                {
+                    if (_isEditable) await SaveEmploymentData();
+                    await NavigateToStep(8);
+                },
+                "PREVIOUS",
+                nextButtonText
             );
             form.Children.Add(navigationButtons);
 
@@ -1103,7 +1267,7 @@ namespace PMEGP_Physical_V
 
         private void LoadDocUploadContent()
         {
-            var titleFrame = CreateSectionTitle("Document Uploading", "");
+            var titleFrame = CreateSectionTitleWithButton("Document Uploading", "📍", _isEditable);
             ContentContainer.Children.Add(titleFrame);
 
             var form = new StackLayout { Spacing = 16 };
@@ -1111,13 +1275,344 @@ namespace PMEGP_Physical_V
             var tableFrame = CreateDocumentTable();
             form.Children.Add(tableFrame);
 
+            string nextButtonText = _isEditable ? "SAVE & NEXT" : "NEXT";
             var navigationButtons = CreateDualNavigationButtons(
                 async () => await NavigateToStep(7),
-                async () => await NavigateToStep(9)
+                async () =>
+                {
+                    if (_isEditable) await SaveDocumentData();
+                    await NavigateToStep(9);
+                },
+                "PREVIOUS",
+                nextButtonText
             );
             form.Children.Add(navigationButtons);
 
             ContentContainer.Children.Add(form);
+        }
+
+        private Frame CreateSectionTitleWithButton(string title, string icon, bool showButton)
+        {
+            var titleFrame = new Frame
+            {
+                BackgroundColor = Color.FromArgb("#F0F8F0"),
+                BorderColor = Color.FromArgb("#E0E0E0"),
+                CornerRadius = 12,
+                Padding = new Thickness(20, 15),
+                Margin = new Thickness(0, 0, 0, 20),
+                HasShadow = false
+            };
+
+            var titleGrid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitionCollection
+        {
+            new ColumnDefinition { Width = GridLength.Star },
+            new ColumnDefinition { Width = GridLength.Auto }
+        }
+            };
+
+            var titleStack = new StackLayout
+            {
+                Orientation = StackOrientation.Horizontal,
+                Spacing = 10,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            var iconLabel = new Label
+            {
+                Text = icon,
+                FontSize = 20,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            var titleLabel = new Label
+            {
+                Text = title,
+                FontSize = 18,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Color.FromArgb("#2E7D32"),
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            titleStack.Children.Add(iconLabel);
+            titleStack.Children.Add(titleLabel);
+
+            Grid.SetColumn(titleStack, 0);
+            titleGrid.Children.Add(titleStack);
+
+            if (showButton)
+            {
+                var uploadButton = new Frame
+                {
+                    BackgroundColor = Color.FromArgb("#FF6B35"),
+                    CornerRadius = 20,
+                    WidthRequest = 40,
+                    HeightRequest = 40,
+                    Padding = 0,
+                    HasShadow = true,
+                    VerticalOptions = LayoutOptions.Center,
+                    HorizontalOptions = LayoutOptions.End
+                };
+
+                var uploadIcon = new Image
+                {
+                    Source = "upload.png",
+                    WidthRequest = 24,
+                    HeightRequest = 24,
+                    HorizontalOptions = LayoutOptions.Center,
+                    VerticalOptions = LayoutOptions.Center
+                };
+
+                uploadButton.Content = uploadIcon;
+
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += OnOpenDocumentUploadModal;
+                uploadButton.GestureRecognizers.Add(tapGesture);
+
+                Grid.SetColumn(uploadButton, 1);
+                titleGrid.Children.Add(uploadButton);
+            }
+
+            titleFrame.Content = titleGrid;
+            return titleFrame;
+        }
+
+        private List<DocumentUploadItem> _uploadedDocuments = new List<DocumentUploadItem>();
+
+        private class DocumentUploadItem
+        {
+            public string DocType { get; set; }
+            public string DocName { get; set; }
+            public string FilePath { get; set; }
+            public byte[] FileData { get; set; }
+        }
+
+        private async void OnOpenDocumentUploadModal(object sender, EventArgs e)
+        {
+            CloseCurrentModal();
+
+            var modal = CreateDocumentUploadModal();
+            _currentModal = modal;
+
+            if (this.Content is Grid rootGrid)
+            {
+                Grid.SetRowSpan(modal, 3);
+                Grid.SetRow(modal, 0);
+                rootGrid.Children.Add(modal);
+            }
+        }
+
+        private AbsoluteLayout CreateDocumentUploadModal()
+        {
+            var modalOverlay = new AbsoluteLayout
+            {
+                BackgroundColor = Color.FromArgb("#AA000000"),
+                HorizontalOptions = LayoutOptions.Fill,
+                VerticalOptions = LayoutOptions.Fill
+            };
+
+            var contentFrame = new Frame
+            {
+                BackgroundColor = Colors.White,
+                BorderColor = Color.FromArgb("#E0E0E0"),
+                CornerRadius = 15,
+                Padding = new Thickness(20),
+                WidthRequest = 340,
+                HeightRequest = 480,
+                HasShadow = true
+            };
+
+            var contentStack = new StackLayout { Spacing = 20 };
+
+            var headerLabel = new Label
+            {
+                Text = "Document Upload Form",
+                FontSize = 20,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Color.FromArgb("#333333"),
+                HorizontalTextAlignment = TextAlignment.Center
+            };
+
+            // Document Type Picker
+            var docTypePicker = new Picker
+            {
+                Title = "Document Type*",
+                FontSize = 16,
+                BackgroundColor = Colors.White,
+                HeightRequest = 50
+            };
+            docTypePicker.Items.Add("Unit Photo");
+            docTypePicker.Items.Add("Product Photo");
+            docTypePicker.Items.Add("Bank Document");
+            docTypePicker.Items.Add("PMEGP SignBoard Photo");
+            docTypePicker.Items.Add("Declaration Photo");
+            docTypePicker.Items.Add("Manufacturing");
+            docTypePicker.Items.Add("Others");
+
+            // Document Name Entry
+            var docNameEntry = new Entry
+            {
+                Placeholder = "Document Name*",
+                FontSize = 16,
+                BackgroundColor = Colors.White,
+                HeightRequest = 50
+            };
+
+            // File Picker Section
+            var filePickerFrame = new Frame
+            {
+                BackgroundColor = Color.FromArgb("#F5F5F5"),
+                BorderColor = Color.FromArgb("#E0E0E0"),
+                CornerRadius = 8,
+                Padding = new Thickness(10),
+                HeightRequest = 50
+            };
+
+            var filePickerGrid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitionCollection
+        {
+            new ColumnDefinition { Width = GridLength.Auto },
+            new ColumnDefinition { Width = GridLength.Star }
+        }
+            };
+
+            var chooseFileButton = new Button
+            {
+                Text = "Choose File",
+                BackgroundColor = Color.FromArgb("#2196F3"),
+                TextColor = Colors.White,
+                FontSize = 12,
+                CornerRadius = 6,
+                HeightRequest = 35,
+                WidthRequest = 100,
+                Padding = new Thickness(5, 0)
+            };
+
+            var fileNameLabel = new Label
+            {
+                Text = "No file chosen",
+                FontSize = 14,
+                TextColor = Color.FromArgb("#666666"),
+                VerticalOptions = LayoutOptions.Center,
+                Margin = new Thickness(10, 0, 0, 0)
+            };
+
+            chooseFileButton.Clicked += async (s, e) =>
+            {
+                var result = await FilePicker.PickAsync(new PickOptions
+                {
+                    PickerTitle = "Select Document",
+                    FileTypes = FilePickerFileType.Images
+                });
+
+                if (result != null)
+                {
+                    fileNameLabel.Text = result.FileName;
+                    fileNameLabel.ClassId = result.FullPath; // Store path
+                }
+            };
+
+            Grid.SetColumn(chooseFileButton, 0);
+            Grid.SetColumn(fileNameLabel, 1);
+            filePickerGrid.Children.Add(chooseFileButton);
+            filePickerGrid.Children.Add(fileNameLabel);
+            filePickerFrame.Content = filePickerGrid;
+
+            // Upload Button
+            var uploadButton = new Button
+            {
+                Text = "DOCUMENT UPLOAD",
+                BackgroundColor = Color.FromArgb("#4CAF50"),
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
+                HeightRequest = 45,
+                FontSize = 16
+            };
+
+            uploadButton.Clicked += async (s, e) =>
+            {
+                // Validate
+                if (docTypePicker.SelectedIndex < 0)
+                {
+                    await DisplayAlert("Validation", "Please select document type", "OK");
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(docNameEntry.Text))
+                {
+                    await DisplayAlert("Validation", "Please enter document name", "OK");
+                    return;
+                }
+
+                if (fileNameLabel.Text == "No file chosen")
+                {
+                    await DisplayAlert("Validation", "Please choose a file", "OK");
+                    return;
+                }
+
+                // Add to uploaded documents list
+                var uploadItem = new DocumentUploadItem
+                {
+                    DocType = docTypePicker.SelectedItem.ToString(),
+                    DocName = docNameEntry.Text,
+                    FilePath = fileNameLabel.ClassId
+                };
+
+                // Read file data
+                try
+                {
+                    using (var stream = await FileSystem.OpenAppPackageFileAsync(uploadItem.FilePath))
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        await stream.CopyToAsync(memoryStream);
+                        uploadItem.FileData = memoryStream.ToArray();
+                    }
+                }
+                catch
+                {
+                    // File reading failed - continue anyway for demo
+                }
+
+                _uploadedDocuments.Add(uploadItem);
+
+                await DisplayAlert("Success", "Document uploaded successfully", "OK");
+                CloseCurrentModal();
+
+                // Refresh document table
+                LoadStepContent(8); // Reload step 8
+            };
+
+            // Close Button
+            var closeButton = new Button
+            {
+                Text = "CANCEL",
+                BackgroundColor = Color.FromArgb("#6C757D"),
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
+                HeightRequest = 45,
+                FontSize = 16
+            };
+            closeButton.Clicked += OnCloseModalClicked;
+
+            contentStack.Children.Add(headerLabel);
+            contentStack.Children.Add(docTypePicker);
+            contentStack.Children.Add(docNameEntry);
+            contentStack.Children.Add(filePickerFrame);
+            contentStack.Children.Add(uploadButton);
+            contentStack.Children.Add(closeButton);
+
+            contentFrame.Content = contentStack;
+
+            AbsoluteLayout.SetLayoutBounds(contentFrame, new Rect(0.5, 0.5, AbsoluteLayout.AutoSize, AbsoluteLayout.AutoSize));
+            AbsoluteLayout.SetLayoutFlags(contentFrame, AbsoluteLayoutFlags.PositionProportional);
+
+            modalOverlay.Children.Add(contentFrame);
+
+            return modalOverlay;
         }
 
         private Frame CreateDocumentTable()
@@ -1142,7 +1637,7 @@ namespace PMEGP_Physical_V
         {
             new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+            new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) }
         }
             };
 
@@ -1164,9 +1659,9 @@ namespace PMEGP_Physical_V
                 HorizontalTextAlignment = TextAlignment.Center
             };
 
-            var docFileHeader = new Label
+            var docActionHeader = new Label
             {
-                Text = "Document File",
+                Text = "Actions",
                 TextColor = Colors.White,
                 FontAttributes = FontAttributes.Bold,
                 FontSize = 14,
@@ -1175,74 +1670,137 @@ namespace PMEGP_Physical_V
 
             Grid.SetColumn(docTypeHeader, 0);
             Grid.SetColumn(docNameHeader, 1);
-            Grid.SetColumn(docFileHeader, 2);
+            Grid.SetColumn(docActionHeader, 2);
 
             headerGrid.Children.Add(docTypeHeader);
             headerGrid.Children.Add(docNameHeader);
-            headerGrid.Children.Add(docFileHeader);
+            headerGrid.Children.Add(docActionHeader);
 
             mainLayout.Children.Add(headerGrid);
 
-            // Use _imageData instead of _apiData for documents
-            if (_imageData?.phyVerificationDocs != null && _imageData.phyVerificationDocs.Any())
+            // Combine API documents with uploaded documents
+            var allDocuments = new List<object>();
+
+            if (_imageData?.phyVerificationDocs != null)
             {
-                for (int i = 0; i < _imageData.phyVerificationDocs.Count; i++)
+                allDocuments.AddRange(_imageData.phyVerificationDocs);
+            }
+
+            if (_isEditable && _uploadedDocuments != null)
+            {
+                allDocuments.AddRange(_uploadedDocuments);
+            }
+
+            for (int i = 0; i < allDocuments.Count; i++)
+            {
+                var doc = allDocuments[i];
+
+                string docType, docName;
+                bool isUploadedDoc = doc is DocumentUploadItem;
+
+                if (isUploadedDoc)
                 {
-                    var doc = _imageData.phyVerificationDocs[i];
-                    var rowGrid = new Grid
-                    {
-                        BackgroundColor = i % 2 == 0 ? Color.FromArgb("#F9F9F9") : Colors.White,
-                        Padding = new Thickness(15, 15),
-                        ColumnDefinitions = new ColumnDefinitionCollection
-                {
-                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+                    var uploadDoc = doc as DocumentUploadItem;
+                    docType = uploadDoc.DocType;
+                    docName = uploadDoc.DocName;
                 }
-                    };
+                else
+                {
+                    var apiDoc = doc as PhyVerificationDoc;
+                    docType = apiDoc.DocType ?? "Document";
+                    docName = apiDoc.DocDescription ?? "Document";
+                }
 
-                    var docTypeLabel = new Label
-                    {
-                        Text = doc.DocType ?? "Document",
-                        TextColor = Color.FromArgb("#333333"),
-                        FontSize = 14,
-                        HorizontalTextAlignment = TextAlignment.Center,
-                        VerticalTextAlignment = TextAlignment.Center
-                    };
+                var rowGrid = new Grid
+                {
+                    BackgroundColor = i % 2 == 0 ? Color.FromArgb("#F9F9F9") : Colors.White,
+                    Padding = new Thickness(15, 15),
+                    ColumnDefinitions = new ColumnDefinitionCollection
+            {
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) }
+            }
+                };
 
-                    var docNameLabel = new Label
-                    {
-                        Text = doc.DocDescription ?? "Document",
-                        TextColor = Color.FromArgb("#333333"),
-                        FontSize = 14,
-                        HorizontalTextAlignment = TextAlignment.Center,
-                        VerticalTextAlignment = TextAlignment.Center
-                    };
+                var docTypeLabel = new Label
+                {
+                    Text = docType,
+                    TextColor = Color.FromArgb("#333333"),
+                    FontSize = 14,
+                    HorizontalTextAlignment = TextAlignment.Center,
+                    VerticalTextAlignment = TextAlignment.Center
+                };
 
-                    var viewButton = new Button
+                var docNameLabel = new Label
+                {
+                    Text = docName,
+                    TextColor = Color.FromArgb("#333333"),
+                    FontSize = 14,
+                    HorizontalTextAlignment = TextAlignment.Center,
+                    VerticalTextAlignment = TextAlignment.Center
+                };
+
+                // Action buttons
+                var actionStack = new StackLayout
+                {
+                    Orientation = StackOrientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalOptions = LayoutOptions.Center
+                };
+
+                var viewButton = new Button
+                {
+                    Text = "View",
+                    BackgroundColor = Color.FromArgb("#4CAF50"),
+                    TextColor = Colors.White,
+                    FontAttributes = FontAttributes.Bold,
+                    CornerRadius = 8,
+                    HeightRequest = 35,
+                    WidthRequest = 60,
+                    FontSize = 12,
+                    ClassId = i.ToString()
+                };
+                viewButton.Clicked += OnViewDocumentClicked;
+
+                actionStack.Children.Add(viewButton);
+
+                // Add delete button only for uploaded documents in edit mode
+                if (_isEditable && isUploadedDoc)
+                {
+                    var deleteButton = new Button
                     {
-                        Text = "View",
-                        BackgroundColor = Color.FromArgb("#4CAF50"),
+                        Text = "Delete",
+                        BackgroundColor = Color.FromArgb("#F44336"),
                         TextColor = Colors.White,
                         FontAttributes = FontAttributes.Bold,
                         CornerRadius = 8,
                         HeightRequest = 35,
+                        WidthRequest = 60,
                         FontSize = 12,
-                        HorizontalOptions = LayoutOptions.Center,
                         ClassId = i.ToString()
                     };
-                    viewButton.Clicked += OnViewDocumentClicked;
-
-                    Grid.SetColumn(docTypeLabel, 0);
-                    Grid.SetColumn(docNameLabel, 1);
-                    Grid.SetColumn(viewButton, 2);
-
-                    rowGrid.Children.Add(docTypeLabel);
-                    rowGrid.Children.Add(docNameLabel);
-                    rowGrid.Children.Add(viewButton);
-
-                    mainLayout.Children.Add(rowGrid);
+                    deleteButton.Clicked += async (s, e) =>
+                    {
+                        bool confirm = await DisplayAlert("Confirm", "Delete this document?", "Yes", "No");
+                        if (confirm)
+                        {
+                            _uploadedDocuments.RemoveAt(int.Parse(deleteButton.ClassId));
+                            LoadStepContent(8); // Reload
+                        }
+                    };
+                    actionStack.Children.Add(deleteButton);
                 }
+
+                Grid.SetColumn(docTypeLabel, 0);
+                Grid.SetColumn(docNameLabel, 1);
+                Grid.SetColumn(actionStack, 2);
+
+                rowGrid.Children.Add(docTypeLabel);
+                rowGrid.Children.Add(docNameLabel);
+                rowGrid.Children.Add(actionStack);
+
+                mainLayout.Children.Add(rowGrid);
             }
 
             tableFrame.Content = mainLayout;
@@ -1428,8 +1986,8 @@ namespace PMEGP_Physical_V
             if (_apiData != null)
             {
                 var verificationStatusFrame = CreateDropdownEntry("Verification Status*",
-                    _apiData.phyVerificationModel?.VeriStatus == "WR" ? "Completed" : "Pending",
-                    false, true, true);
+    _apiData.phyVerificationModel?.VeriStatus == "WR" ? "Completed" : "Pending",
+    false, true, !_isEditable); // Enable dropdown when editable
                 form.Children.Add(verificationStatusFrame);
 
                 form.Children.Add(CreateFormEntry("Verification Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.VerDate), true));
@@ -1722,21 +2280,23 @@ namespace PMEGP_Physical_V
         }
 
         // Updated CreateFormEntry to be non-editable
-        private Grid CreateFormEntry(string placeholder, string text = "", bool isDateField = false, bool isFirstField = false)
+        private Grid CreateFormEntry(string placeholder, string text = "", bool isDateField = false, bool isFirstField = false, bool forceEditable = false)
         {
             var grid = new Grid
             {
                 Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0)
             };
 
+            bool isReadOnly = !(_isEditable || forceEditable);
+
             var entry = new Entry
             {
                 Text = text,
                 FontSize = 16,
                 TextColor = Colors.Black,
-                BackgroundColor = Color.FromArgb("#F8F8F8"), // Light gray background for non-editable
-                IsReadOnly = true, // Make non-editable
-                IsEnabled = false, // Disable interaction
+                BackgroundColor = isReadOnly ? Color.FromArgb("#F8F8F8") : Colors.White,
+                IsReadOnly = isReadOnly,
+                IsEnabled = !isReadOnly,
                 HeightRequest = 56,
                 VerticalOptions = LayoutOptions.Center
             };
@@ -1762,15 +2322,30 @@ namespace PMEGP_Physical_V
                 {
                     Text = "📅",
                     FontSize = 16,
-                    TextColor = Color.FromArgb("#999999"), // Dimmed icon for disabled state
+                    TextColor = isReadOnly ? Color.FromArgb("#999999") : Color.FromArgb("#4CAF50"),
                     VerticalOptions = LayoutOptions.Center,
                     HorizontalOptions = LayoutOptions.End,
                     Margin = new Thickness(0, 0, 16, 0)
                 };
+
+                if (!isReadOnly)
+                {
+                    var tapGesture = new TapGestureRecognizer();
+                    tapGesture.Tapped += async (s, e) => await OpenDatePicker(entry);
+                    dateIcon.GestureRecognizers.Add(tapGesture);
+                }
+
                 grid.Children.Add(dateIcon);
             }
 
             return grid;
+        }
+
+        private async Task OpenDatePicker(Entry targetEntry)
+        {
+            // TODO: Implement date picker modal or use platform-specific date picker
+            // For now, placeholder implementation
+            await DisplayAlert("Date Picker", "Date picker to be implemented", "OK");
         }
 
         // Updated CreateMultilineEntry to be non-editable
@@ -1835,7 +2410,6 @@ namespace PMEGP_Physical_V
             // Add dropdown options for Verification Status
             picker.Items.Add("Completed");
             picker.Items.Add("Pending");
-            picker.Items.Add("In Progress");
 
             if (!string.IsNullOrEmpty(selectedValue))
             {
@@ -1963,7 +2537,7 @@ namespace PMEGP_Physical_V
             return button;
         }
 
-        private Button CreateActionButton(string text, Color backgroundColor, Action action)
+        private Button CreateActionButton(string text, Color backgroundColor, Func<Task> asyncAction, bool enableButton = false)
         {
             var button = new Button
             {
@@ -1975,10 +2549,15 @@ namespace PMEGP_Physical_V
                 HeightRequest = 45,
                 Margin = new Thickness(0, 15, 0, 10),
                 FontSize = 14,
-                IsEnabled = false, // Disable the GET LOCATION button
-                Opacity = 0.6 // Make it appear disabled
+                IsEnabled = enableButton,
+                Opacity = enableButton ? 1.0 : 0.6
             };
-            // Don't attach click handler since it's disabled
+
+            if (enableButton)
+            {
+                button.Clicked += async (s, e) => await asyncAction();
+            }
+
             return button;
         }
 

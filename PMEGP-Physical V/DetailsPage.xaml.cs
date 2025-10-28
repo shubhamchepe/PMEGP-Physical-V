@@ -851,8 +851,9 @@ namespace PMEGP_Physical_V
         {
             try
             {
-                // Make sure applicant.ApplID exists and is an int
-                var unitVerificationPage = new UnitVerificationPage(applicant.ApplID);
+                // Extract badge status and pass to UnitVerificationPage
+                string badgeStatus = applicant.Status?.Trim() ?? "Pending";
+                var unitVerificationPage = new UnitVerificationPage(applicant.ApplID, badgeStatus);
                 await Navigation.PushAsync(unitVerificationPage);
             }
             catch (Exception ex)
