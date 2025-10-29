@@ -29,6 +29,13 @@
 		<key>XSAppIconAssets</key>
 		<string>Assets.xcassets/appicon.appiconset</string>
 
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>This app needs access to location for geo-tagging units.</string>
+		<key>NSLocationAlwaysUsageDescription</key>
+		<string>This app needs access to location for geo-tagging units.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>This app needs access to photos for document upload.</string>
+
 		<!-- 👇 Add this section for SSL exception -->
 		<key>NSAppTransportSecurity</key>
 		<dict>

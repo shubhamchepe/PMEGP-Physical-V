@@ -323,14 +323,23 @@ namespace PMEGP_Physical_V
             viewModel.UnitFullAddress = string.Join(", ", unitAddressParts);
 
             // Determine traceability status
-            if (data.IsNonTracable == true)
+            if (data.IsWorking == true)
             {
-                viewModel.TraceabilityStatus = "Not Traceable";
+                viewModel.TraceabilityStatus = "Working";
+            }
+            else if (data.IsDefunct == true)
+            {
+                viewModel.TraceabilityStatus = "Defunct";
+            }
+            else if (data.IsNonTracable == true)
+            {
+                viewModel.TraceabilityStatus = "Non-Tracable";
             }
             else
             {
-                viewModel.TraceabilityStatus = "Traceable";
+                viewModel.TraceabilityStatus = "Unknown";
             }
+
 
             // Apply status logic with proper null handling
             if (data.IsPendingForFieldInspector == true)
@@ -940,11 +949,45 @@ namespace PMEGP_Physical_V
 
         private Frame CreateTraceabilityButton(string status, double height)
         {
-            var isNotTraceable = status == "Not Traceable";
-            var backgroundColor = isNotTraceable ? Color.FromArgb("#FFE8E8") : Color.FromArgb("#E8F5E8");
-            var textColor = isNotTraceable ? Color.FromArgb("#FF6B35") : Color.FromArgb("#4CAF50");
-            var iconSource = isNotTraceable ? "geo_orange.png" : "geo.png";
+            // Default settings
+            Color backgroundColor = Color.FromArgb("#E8F5E8"); // Light green
+            Color textColor = Color.FromArgb("#4CAF50");       // Green
+            string iconSource = "geo.png";
+            string displayText = "Traceable";
 
+            // Apply dynamic styles based on status
+            switch (status?.Trim())
+            {
+                case "Working":
+                    backgroundColor = Color.FromArgb("#E8F5E8"); // Light green
+                    textColor = Color.FromArgb("#4CAF50");       // Green
+                    iconSource = "geo.png";
+                    displayText = "Working";
+                    break;
+
+                case "Defunct":
+                    backgroundColor = Color.FromArgb("#FFE8E8"); // Light red/pink
+                    textColor = Color.FromArgb("#F44336");       // Red
+                    iconSource = "defunct.png";                  // Optional: use a red variant
+                    displayText = "Defunct";
+                    break;
+
+                case "Non-Tracable":
+                    backgroundColor = Color.FromArgb("#FFF3E0"); // Light orange
+                    textColor = Color.FromArgb("#FF6B35");       // Orange
+                    iconSource = "geo_orange.png";
+                    displayText = "Non-Tracable";
+                    break;
+
+                default:
+                    backgroundColor = Color.FromArgb("#E0E0E0"); // Neutral gray
+                    textColor = Color.FromArgb("#666666");
+                    iconSource = "unknown.png";
+                    displayText = "Unknown";
+                    break;
+            }
+
+            // Create button frame
             var buttonFrame = new Frame
             {
                 BackgroundColor = backgroundColor,
@@ -976,7 +1019,6 @@ namespace PMEGP_Physical_V
             };
 
             var fontSize = GetResponsiveFontSize(isSmallScreen ? 10 : 12);
-            var displayText = isSmallScreen && isNotTraceable ? "Not Track." : (isNotTraceable ? "Not Traceable" : "Traceable");
 
             var textLabel = new Label
             {
@@ -996,6 +1038,7 @@ namespace PMEGP_Physical_V
 
             return buttonFrame;
         }
+
 
         private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
         {

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 
+
 namespace PMEGP_Physical_V
 {
     public class UnitVerificationApiResponse
@@ -666,13 +667,19 @@ namespace PMEGP_Physical_V
 
             if (_apiData != null)
             {
-                form.Children.Add(CreateFormEntry("Beneficiary ID*", _apiData.applicantData?.ApplCode ?? "", false, true));
-                form.Children.Add(CreateFormEntry("Beneficiary Name*", _apiData.applicantData?.ApplName ?? ""));
-                form.Children.Add(CreateFormEntry("Gender*", GetGenderDisplay(_apiData.applicantData?.Gender)));
-                form.Children.Add(CreateFormEntry("Social Category*", _apiData.applicantData?.SocialCatID ?? ""));
-                form.Children.Add(CreateFormEntry("Special Category*", _apiData.applicantData?.SpecialCatID ?? ""));
-                form.Children.Add(CreateFormEntry("Email ID*", _apiData.applicantData?.eMail ?? ""));
-                form.Children.Add(CreateFormEntry("Mobile Number*", _apiData.applicantData?.MobileNo1 ?? ""));
+                // Temporarily override _isEditable to force read-only state for Beneficiary section
+                bool originalIsEditable = _isEditable;
+                _isEditable = false; // Force non-editable
+
+                form.Children.Add(CreateFormEntry("Beneficiary ID*", _apiData.applicantData?.ApplCode ?? "", false, true, false));
+                form.Children.Add(CreateFormEntry("Beneficiary Name*", _apiData.applicantData?.ApplName ?? "", false, false, false));
+                form.Children.Add(CreateFormEntry("Gender*", GetGenderDisplay(_apiData.applicantData?.Gender), false, false, false));
+                form.Children.Add(CreateFormEntry("Social Category*", _apiData.applicantData?.SocialCatID ?? "", false, false, false));
+                form.Children.Add(CreateFormEntry("Special Category*", _apiData.applicantData?.SpecialCatID ?? "", false, false, false));
+                form.Children.Add(CreateFormEntry("Email ID*", _apiData.applicantData?.eMail ?? "", false, false, false));
+                form.Children.Add(CreateFormEntry("Mobile Number*", _apiData.applicantData?.MobileNo1 ?? "", false, false, false));
+
+                _isEditable = originalIsEditable; // Restore original state
             }
             else
             {
@@ -721,7 +728,7 @@ namespace PMEGP_Physical_V
                     var geoTagEntry = FindEntryByClassId("GeoTagEntry");
                     if (geoTagEntry != null)
                     {
-                        string geoTagId = Helpers.GeoTagHelper.GenerateGeoTagId(location.Latitude, location.Longitude);
+                        string geoTagId = GenerateGeoTagId(location.Latitude, location.Longitude);
                         geoTagEntry.Text = geoTagId;
                     }
 
@@ -779,7 +786,7 @@ namespace PMEGP_Physical_V
 
                 form.Children.Add(CreateFormEntry("Unit Establishment Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.UnitEstDate), true, false, _isEditable));
                 form.Children.Add(CreateFormEntry("GST Registration Number*", _apiData.phyVerificationModel?.UnitGSTNo ?? "", false, false, _isEditable));
-                form.Children.Add(CreateFormEntry("Udyam Registration Number", _apiData.phyVerificationModel?.UnitUdyamRegNo ?? "", false, false, _isEditable));
+                form.Children.Add(CreateFormEntry("Udyam Registration Number", _apiData.phyVerificationModel?.UnitUdyamRegNo ?? "", false, false, false));
                 form.Children.Add(CreateFormEntry("Unit Location*", _apiData.phyVerificationModel?.UnitLocation ?? "", false, false, _isEditable));
                 form.Children.Add(CreateFormEntry("Unit Sponsored By*", _apiData.applicantData?.AgencyCode ?? "", false, false, _isEditable));
                 form.Children.Add(CreateFormEntry("Agency Office Name*", _apiData.AgencyOffDetailModel?.AgencyOffName ?? "", false, false, _isEditable));
@@ -1006,9 +1013,9 @@ namespace PMEGP_Physical_V
 
             if (_apiData != null)
             {
-                form.Children.Add(CreateFormEntry("EDP Completed*", ConvertUnixToDate(_apiData.edpTrainingModel?.TrDateTo), true, true));
+                form.Children.Add(CreateFormEntry("EDP Completed*", ConvertUnixToDate(_apiData.edpTrainingModel?.TrDateTo), false, false, false));
                 form.Children.Add(CreateFormEntry("EDP Training Period*", _apiData.phyVerificationModel?.EDPPeriod ?? "", false, false, _isEditable));
-                form.Children.Add(CreateFormEntry("Name of Institute*", _apiData.edpTrainingModel?.EDPTCName ?? ""));
+                form.Children.Add(CreateFormEntry("Name of Institute*", _apiData.edpTrainingModel?.EDPTCName ?? "", false, false, false));
 
                 var addressFrame = CreateMultilineEntry("Address of Institute*", _apiData.edpTrainingModel?.EDPAddress ?? "");
                 form.Children.Add(addressFrame);
@@ -1118,6 +1125,108 @@ namespace PMEGP_Physical_V
             ContentContainer.Children.Add(form);
         }
 
+        private string ConvertNumberToRupeesWords(long amount)
+        {
+            if (amount == 0) return "Rupees Zero Only";
+            if (amount < 0) return "Minus " + ConvertNumberToRupeesWords(-amount);
+
+            string words = "";
+
+            // Crore (10,000,000)
+            if (amount >= 10000000)
+            {
+                long crore = amount / 10000000;
+                words += ConvertHundreds((int)crore) + "Crore ";
+                amount %= 10000000;
+            }
+
+            // Lakh (100,000)
+            if (amount >= 100000)
+            {
+                long lakh = amount / 100000;
+                words += ConvertHundreds((int)lakh) + "Lakh ";
+                amount %= 100000;
+            }
+
+            // Thousand (1,000)
+            if (amount >= 1000)
+            {
+                long thousand = amount / 1000;
+                words += ConvertHundreds((int)thousand) + "Thousand ";
+                amount %= 1000;
+            }
+
+            // Hundreds
+            if (amount > 0)
+            {
+                words += ConvertHundreds((int)amount);
+            }
+
+            return "Rupees " + words.Trim() + " Only";
+        }
+
+        private string ConvertHundreds(int number)
+        {
+            string[] units = { "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine" };
+            string[] teens = { "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen" };
+            string[] tens = { "", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety" };
+
+            string word = "";
+
+            if (number >= 100)
+            {
+                word += units[number / 100] + " Hundred ";
+                number %= 100;
+            }
+
+            if (number >= 20)
+            {
+                word += tens[number / 10] + " ";
+                number %= 10;
+            }
+            else if (number >= 10)
+            {
+                word += teens[number - 10] + " ";
+                return word;
+            }
+
+            if (number > 0)
+            {
+                word += units[number] + " ";
+            }
+
+            return word;
+        }
+
+        private string GenerateGeoTagId(double latitude, double longitude)
+        {
+            // Create deterministic ID from coordinates
+            string combined = $"{latitude:F6}_{longitude:F6}";
+
+            using (var sha256 = System.Security.Cryptography.SHA256.Create())
+            {
+                byte[] hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(combined));
+                string hash = BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 12);
+                return $"GEOTAG_{hash}";
+            }
+        }
+
+        private string ConvertSchemeIdToString(object schemeId)
+        {
+            if (schemeId == null) return string.Empty;
+
+            // Handle if it's already a string
+            if (schemeId is string str)
+                return str;
+
+            // Handle if it's a number (int, long, decimal, etc.)
+            if (schemeId is int || schemeId is long || schemeId is decimal || schemeId is double)
+                return schemeId.ToString();
+
+            // Fallback
+            return schemeId.ToString();
+        }
+
         private void LoadProductAndSalesContent()
         {
             var titleFrame = CreateSectionTitle("Product And Sales", "");
@@ -1131,11 +1240,12 @@ namespace PMEGP_Physical_V
                 form.Children.Add(annualProductionFrame);
 
                 // Add words for Annual Production
+                // Add words for Annual Production
                 if (_apiData.phyVerificationModel?.AnlProdVal.HasValue == true)
                 {
                     var productionWords = new Label
                     {
-                        Text = Helpers.NumberToWords.ConvertNumberToRupeesWords((long)_apiData.phyVerificationModel.AnlProdVal.Value),
+                        Text = ConvertNumberToRupeesWords((long)_apiData.phyVerificationModel.AnlProdVal.Value),
                         FontSize = 11,
                         TextColor = Color.FromArgb("#666666"),
                         Margin = new Thickness(0, -10, 0, 5),
@@ -1152,7 +1262,7 @@ namespace PMEGP_Physical_V
                 {
                     var salesWords = new Label
                     {
-                        Text = Helpers.NumberToWords.ConvertNumberToRupeesWords((long)_apiData.phyVerificationModel.AnlSaleVal.Value),
+                        Text = ConvertNumberToRupeesWords((long)_apiData.phyVerificationModel.AnlSaleVal.Value),
                         FontSize = 11,
                         TextColor = Color.FromArgb("#666666"),
                         Margin = new Thickness(0, -10, 0, 5),
@@ -1993,16 +2103,23 @@ namespace PMEGP_Physical_V
                 form.Children.Add(CreateFormEntry("Verification Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.VerDate), true));
                 form.Children.Add(CreateFormEntry("Verification Agency Name*", _apiData.phyVerificationModel?.VerAgencyName ?? ""));
 
-                var enumeratorRemarkFrame = CreateMultilineEntry("Enumerator Remark*", _apiData.phyVerificationModel?.EnumRem ?? "");
+                var enumeratorRemarkFrame = CreateMultilineEntry("Enumerator Remark*", _apiData.phyVerificationModel?.EnumRem ?? "", false, _isEditable);
                 form.Children.Add(enumeratorRemarkFrame);
 
-                var signBoardSection = CreateSwitchSection("Prominent Sign Board installed", _apiData.phyVerificationModel?.IsSignBoardIns ?? false);
+                var signBoardSection = CreateSwitchSection("Prominent Sign Board installed", _apiData.phyVerificationModel?.IsSignBoardIns ?? false, _isEditable);
                 form.Children.Add(signBoardSection);
             }
 
+            string nextButtonText = _isEditable ? "SAVE & NEXT" : "NEXT";
             var navigationButtons = CreateDualNavigationButtons(
                 async () => await NavigateToStep(8),
-                async () => await NavigateToStep(10)
+                async () =>
+                {
+                    if (_isEditable) await SaveVerificationData();
+                    await NavigateToStep(10);
+                },
+                "PREVIOUS",
+                nextButtonText
             );
             form.Children.Add(navigationButtons);
 
@@ -2054,7 +2171,7 @@ namespace PMEGP_Physical_V
             ContentContainer.Children.Add(form);
         }
 
-        private StackLayout CreateVerificationStatusSection(string veriStatus = null)
+        private StackLayout CreateVerificationStatusSection(string veriStatus = null, bool enableSelection = false)
         {
             var section = new StackLayout { Spacing = 12 };
 
@@ -2079,9 +2196,9 @@ namespace PMEGP_Physical_V
             var isDefunct = veriStatus == "DF";
             var isNonTraceable = veriStatus == "NT";
 
-            radioGroup.Children.Add(CreateRadioButton("Working", isWorking));
-            radioGroup.Children.Add(CreateRadioButton("Defunct", isDefunct));
-            radioGroup.Children.Add(CreateRadioButton("Non-Traceable", isNonTraceable));
+            radioGroup.Children.Add(CreateRadioButton("Working", isWorking, enableSelection));
+            radioGroup.Children.Add(CreateRadioButton("Defunct", isDefunct, enableSelection));
+            radioGroup.Children.Add(CreateRadioButton("Non-Traceable", isNonTraceable, enableSelection));
 
             section.Children.Add(radioGroup);
             return section;
@@ -2200,6 +2317,9 @@ namespace PMEGP_Physical_V
                 summary.Children.Add(CreateFormEntry("ST*", _apiData.phyVerificationModel?.EmpST?.ToString() ?? ""));
                 summary.Children.Add(CreateFormEntry("OBC*", _apiData.phyVerificationModel?.EmpOBC?.ToString() ?? ""));
                 summary.Children.Add(CreateFormEntry("Minority*", _apiData.phyVerificationModel?.EmpMinority?.ToString() ?? ""));
+                summary.Children.Add(CreateFormEntry("Full-Time Employees", "0"));
+                summary.Children.Add(CreateFormEntry("Part-Time Employees", "0"));
+                summary.Children.Add(CreateFormEntry("Seasonal Employees", "0"));
                 summary.Children.Add(CreateFormEntry("Total Number Of Employees*", _apiData.phyVerificationModel?.TotalEMP?.ToString() ?? ""));
                 var wagesFrame = CreateFormEntry("Average Wages paid per employee per month", _apiData.phyVerificationModel?.AvgWgPaidPerMonth?.ToString("F2") ?? "");
                 summary.Children.Add(wagesFrame);
@@ -2289,6 +2409,42 @@ namespace PMEGP_Physical_V
 
             bool isReadOnly = !(_isEditable || forceEditable);
 
+            // Always non-editable fields
+            string[] readOnlyFields = new[]
+            {
+        "Udyam Registration Number",
+        "Address*",
+        "Taluka/Block*",
+        "District*",
+        "State*",
+        "Pincode*",
+        "Industry Type*",
+        "Industry Activity*",
+        "Product Description*",
+        "Longitude*",
+        "Latitude*",
+        "Geo Tagging ID*",
+        "EDP Completed*",
+        "Name of Institute*",
+        "Address of Institute*",
+        "Project Sanctioned Date*",
+        "Capital Expenditure*",
+        "Working Capital*",
+        "Own Contribution*",
+        "Total*",
+        "Financing Bank*",
+        "Bank Branch*",
+        "Bank Address*",
+        "IFSC code*",
+        "Verification Date*",
+        "Verification Agency Name*"
+    };
+
+            if (readOnlyFields.Any(f => placeholder.Equals(f, StringComparison.OrdinalIgnoreCase)))
+            {
+                isReadOnly = true;
+            }
+
             var entry = new Entry
             {
                 Text = text,
@@ -2349,21 +2505,23 @@ namespace PMEGP_Physical_V
         }
 
         // Updated CreateMultilineEntry to be non-editable
-        private Grid CreateMultilineEntry(string placeholder, string text, bool isFirstField = false)
+        private Grid CreateMultilineEntry(string placeholder, string text, bool isFirstField = false, bool forceEditable = false)
         {
             var grid = new Grid
             {
                 Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0)
             };
 
+            bool isReadOnly = !(_isEditable || forceEditable);
+
             var editor = new Editor
             {
                 Text = text,
                 FontSize = 16,
                 TextColor = Colors.Black,
-                BackgroundColor = Color.FromArgb("#F8F8F8"), // Light gray background for non-editable
-                IsReadOnly = true, // Make non-editable
-                IsEnabled = false, // Disable interaction
+                BackgroundColor = isReadOnly ? Color.FromArgb("#F8F8F8") : Colors.White, // Light gray background for non-editable
+                IsReadOnly = isReadOnly,
+                IsEnabled = !isReadOnly,
                 HeightRequest = 80,
                 VerticalOptions = LayoutOptions.Center
             };
@@ -2434,7 +2592,7 @@ namespace PMEGP_Physical_V
             return grid;
         }
 
-        private StackLayout CreateSwitchSection(string text, bool isOn)
+        private StackLayout CreateSwitchSection(string text, bool isOn, bool enableSwitch = false)
         {
             var section = new StackLayout
             {
@@ -2461,7 +2619,7 @@ namespace PMEGP_Physical_V
                 ThumbColor = Colors.White,
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalOptions = LayoutOptions.End,
-                IsEnabled = false // Make it non-interactive for readonly form
+                IsEnabled = enableSwitch // Make it non-interactive for readonly form
             };
 
             section.Children.Add(label);
@@ -2470,7 +2628,7 @@ namespace PMEGP_Physical_V
             return section;
         }
 
-        private StackLayout CreateRadioButton(string text, bool isSelected)
+        private StackLayout CreateRadioButton(string text, bool isSelected, bool enableInteraction = false)
         {
             var container = new StackLayout
             {
@@ -2489,7 +2647,7 @@ namespace PMEGP_Physical_V
                 Padding = 0,
                 HasShadow = false,
                 VerticalOptions = LayoutOptions.Center,
-                IsEnabled = false // Make non-interactive
+                ClassId = text // Store the radio button value
             };
 
             if (isSelected)
@@ -2510,14 +2668,56 @@ namespace PMEGP_Physical_V
             {
                 Text = text,
                 FontSize = 14,
-                TextColor = Color.FromArgb("#666666"), // Dimmed for disabled state
+                TextColor = enableInteraction ? Colors.Black : Color.FromArgb("#666666"),
                 VerticalOptions = LayoutOptions.Center
             };
 
             container.Children.Add(radioCircle);
             container.Children.Add(label);
 
+            // Add tap gesture if interaction is enabled
+            if (enableInteraction)
+            {
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += (s, e) => OnRadioButtonTapped(radioCircle);
+                container.GestureRecognizers.Add(tapGesture);
+            }
+
             return container;
+        }
+
+        private void OnRadioButtonTapped(Frame selectedRadio)
+        {
+            // Find parent StackLayout containing all radio buttons
+            var parentStack = selectedRadio.Parent?.Parent as StackLayout;
+            if (parentStack == null) return;
+
+            // Clear all radio buttons in the group
+            foreach (var child in parentStack.Children)
+            {
+                if (child is StackLayout radioContainer)
+                {
+                    var radioFrame = radioContainer.Children.FirstOrDefault() as Frame;
+                    if (radioFrame != null)
+                    {
+                        radioFrame.BackgroundColor = Colors.Transparent;
+                        radioFrame.Content = null;
+                    }
+                }
+            }
+
+            // Select the tapped radio button
+            selectedRadio.BackgroundColor = Color.FromArgb("#4CAF50");
+            var innerDot = new BoxView
+            {
+                BackgroundColor = Colors.White,
+                WidthRequest = 10,
+                HeightRequest = 10,
+                CornerRadius = 5,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+            selectedRadio.Content = innerDot;
         }
 
         private Button CreateNavigationButton(string text, Color backgroundColor, Func<Task> action)
@@ -2561,21 +2761,25 @@ namespace PMEGP_Physical_V
             return button;
         }
 
-        private Grid CreateDualNavigationButtons(Func<Task> previousAction, Func<Task> nextAction)
+        private Grid CreateDualNavigationButtons(
+    Func<Task> previousAction,
+    Func<Task> nextAction,
+    string previousText = "PREVIOUS",
+    string nextText = "NEXT")
         {
             var buttonGrid = new Grid
             {
                 ColumnDefinitions = new ColumnDefinitionCollection
-                {
-                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
-                },
+        {
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+        },
                 ColumnSpacing = 15,
                 Margin = new Thickness(0, 25, 0, 0)
             };
 
-            var previousButton = CreateNavigationButton("PREVIOUS", Color.FromArgb("#6C757D"), previousAction);
-            var nextButton = CreateNavigationButton("NEXT", Color.FromArgb("#4CAF50"), nextAction);
+            var previousButton = CreateNavigationButton(previousText, Color.FromArgb("#6C757D"), previousAction);
+            var nextButton = CreateNavigationButton(nextText, Color.FromArgb("#4CAF50"), nextAction);
 
             Grid.SetColumn(previousButton, 0);
             Grid.SetColumn(nextButton, 1);
@@ -2585,6 +2789,70 @@ namespace PMEGP_Physical_V
 
             return buttonGrid;
         }
+
+        private async Task SaveBeneficiaryData()
+        {
+            // TODO: Wire to API - collect form data and POST
+            System.Diagnostics.Debug.WriteLine("SaveBeneficiaryData called");
+            await Task.Delay(100); // Simulate API call
+        }
+
+        private async Task SaveUnitDetailData()
+        {
+            // TODO: Wire to API
+            // Collect: UnitName, UpdatedAddress, VerificationStatus, EstablishmentDate,
+            // GST, Udyam, Location, SponsoredBy, AgencyOffice, Lat, Long, GeoTagID
+            System.Diagnostics.Debug.WriteLine("SaveUnitDetailData called");
+            await Task.Delay(100);
+        }
+
+        private async Task SaveEDPTrainingData()
+        {
+            // TODO: Wire to API - collect EDP training period
+            System.Diagnostics.Debug.WriteLine("SaveEDPTrainingData called");
+            await Task.Delay(100);
+        }
+
+        private async Task SaveProjectDetailData()
+        {
+            // TODO: Wire to API - collect scheme and project details
+            System.Diagnostics.Debug.WriteLine("SaveProjectDetailData called");
+            await Task.Delay(100);
+        }
+
+        private async Task SaveProductSalesData()
+        {
+            // TODO: Wire to API - collect product dropdown, export country
+            System.Diagnostics.Debug.WriteLine("SaveProductSalesData called");
+            await Task.Delay(100);
+        }
+
+        private async Task SaveEmploymentData()
+        {
+            // TODO: Wire to API - collect Full-Time, Part-Time, Seasonal employees
+            System.Diagnostics.Debug.WriteLine("SaveEmploymentData called");
+            await Task.Delay(100);
+        }
+
+        private async Task SaveDocumentData()
+        {
+            // TODO: Wire to API - upload new documents from _uploadedDocuments list
+            System.Diagnostics.Debug.WriteLine("SaveDocumentData called");
+            foreach (var doc in _uploadedDocuments)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - {doc.DocType}: {doc.DocName}");
+            }
+            await Task.Delay(100);
+        }
+
+        private async Task SaveVerificationData()
+        {
+            // TODO: Wire to API - collect verification status, enumerator remark, signboard status
+            System.Diagnostics.Debug.WriteLine("SaveVerificationData called");
+            await Task.Delay(100);
+        }
+
+
 
         private Frame CreateMapPlaceholder()
         {
