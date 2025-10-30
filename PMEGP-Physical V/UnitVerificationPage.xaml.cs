@@ -280,6 +280,7 @@ namespace PMEGP_Physical_V
         private ImageApiResponse _imageData = null;
         private readonly string _badgeStatus;
         private bool _isEditable = false;
+        private Dictionary<int, Dictionary<string, object>> _stepData = new Dictionary<int, Dictionary<string, object>>();
 
         private readonly Dictionary<int, StepInfo> _stepInfos = new Dictionary<int, StepInfo>
         {
@@ -1017,7 +1018,7 @@ namespace PMEGP_Physical_V
                 form.Children.Add(CreateFormEntry("EDP Training Period*", _apiData.phyVerificationModel?.EDPPeriod ?? "", false, false, _isEditable));
                 form.Children.Add(CreateFormEntry("Name of Institute*", _apiData.edpTrainingModel?.EDPTCName ?? "", false, false, false));
 
-                var addressFrame = CreateMultilineEntry("Address of Institute*", _apiData.edpTrainingModel?.EDPAddress ?? "");
+                var addressFrame = CreateMultilineEntry("Address of Institute*", _apiData.edpTrainingModel?.EDPAddress ?? "", false, false);
                 form.Children.Add(addressFrame);
             }
 
@@ -1110,7 +1111,7 @@ namespace PMEGP_Physical_V
                 form.Children.Add(CreateFormEntry("Financing Bank*", _apiData.applicantData?.FinBank1 ?? "", false, true));
                 form.Children.Add(CreateFormEntry("Bank Branch*", _apiData.applicantData?.BankBranch1 ?? ""));
 
-                var bankAddressFrame = CreateMultilineEntry("Bank Address*", _apiData.applicantData?.BankAddress1 ?? "");
+                var bankAddressFrame = CreateMultilineEntry("Bank Address*", _apiData.applicantData?.BankAddress1 ?? "", false, false, true);
                 form.Children.Add(bankAddressFrame);
 
                 form.Children.Add(CreateFormEntry("IFSC code*", _apiData.applicantData?.BankIFSC1 ?? ""));
@@ -1796,6 +1797,7 @@ namespace PMEGP_Physical_V
                 allDocuments.AddRange(_imageData.phyVerificationDocs);
             }
 
+
             if (_isEditable && _uploadedDocuments != null)
             {
                 allDocuments.AddRange(_uploadedDocuments);
@@ -1875,8 +1877,9 @@ namespace PMEGP_Physical_V
 
                 actionStack.Children.Add(viewButton);
 
+                bool showDeleteButton = !string.Equals(_badgeStatus, "Completed", StringComparison.OrdinalIgnoreCase) && isUploadedDoc;
                 // Add delete button only for uploaded documents in edit mode
-                if (_isEditable && isUploadedDoc)
+                if (showDeleteButton)
                 {
                     var deleteButton = new Button
                     {
@@ -2165,6 +2168,9 @@ namespace PMEGP_Physical_V
             form.Children.Add(CreateCollapsibleSection("Document Uploading", "", CreateDocumentSummary()));
             form.Children.Add(CreateCollapsibleSection("Verification Details", "", CreateVerificationSummary()));
 
+            var finalSubmitButton = CreateNavigationButton("FINAL SUBMIT", Color.FromArgb("#FF6B35"), async () => await FinalSubmit());
+            form.Children.Add(finalSubmitButton);
+
             var previousButton = CreateNavigationButton("PREVIOUS", Color.FromArgb("#6C757D"), async () => await NavigateToStep(9));
             form.Children.Add(previousButton);
 
@@ -2188,8 +2194,9 @@ namespace PMEGP_Physical_V
             var radioGroup = new StackLayout
             {
                 Orientation = StackOrientation.Horizontal,
-                Spacing = 25,
-                Margin = new Thickness(10, 5)
+                Spacing = 15, // Reduced from 25
+                Margin = new Thickness(5, 5), // Reduced left margin
+                HorizontalOptions = LayoutOptions.Fill
             };
 
             var isWorking = veriStatus == "WR";
@@ -2210,13 +2217,13 @@ namespace PMEGP_Physical_V
             var summary = new StackLayout { Spacing = 16 };
             if (_apiData != null)
             {
-                summary.Children.Add(CreateFormEntry("Beneficiary ID*", _apiData.applicantData?.ApplCode ?? "", false, true));
-                summary.Children.Add(CreateFormEntry("Beneficiary Name*", _apiData.applicantData?.ApplName ?? ""));
-                summary.Children.Add(CreateFormEntry("Gender*", GetGenderDisplay(_apiData.applicantData?.Gender)));
-                summary.Children.Add(CreateFormEntry("Social Category*", _apiData.applicantData?.SocialCatID ?? ""));
-                summary.Children.Add(CreateFormEntry("Special Category*", _apiData.applicantData?.SpecialCatID ?? ""));
-                summary.Children.Add(CreateFormEntry("Email ID*", _apiData.applicantData?.eMail ?? ""));
-                summary.Children.Add(CreateFormEntry("Mobile Number*", _apiData.applicantData?.MobileNo1 ?? ""));
+                summary.Children.Add(CreateFormEntry("Beneficiary ID*", _apiData.applicantData?.ApplCode ?? "", false, true, false, true));
+                summary.Children.Add(CreateFormEntry("Beneficiary Name*", _apiData.applicantData?.ApplName ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Gender*", GetGenderDisplay(_apiData.applicantData?.Gender), false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Social Category*", _apiData.applicantData?.SocialCatID ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Special Category*", _apiData.applicantData?.SpecialCatID ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Email ID*", _apiData.applicantData?.eMail ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Mobile Number*", _apiData.applicantData?.MobileNo1 ?? "", false, false, false, true));
             }
             return summary;
         }
@@ -2226,19 +2233,22 @@ namespace PMEGP_Physical_V
             var summary = new StackLayout { Spacing = 16 };
             if (_apiData != null)
             {
-                summary.Children.Add(CreateFormEntry("Unit Name*", _apiData.phyVerificationModel?.UnitName ?? "", false, true));
-                summary.Children.Add(CreateFormEntry("Updated Unit Address*", _apiData.phyVerificationModel?.UnitAddr ?? ""));
+                summary.Children.Add(CreateFormEntry("Unit Name*", _apiData.phyVerificationModel?.UnitName ?? "", false, true, false, true));
+                summary.Children.Add(CreateFormEntry("Updated Unit Address*", _apiData.phyVerificationModel?.UnitAddr ?? "", false, false, false, true));
                 summary.Children.Add(CreateVerificationStatusSection(_apiData.phyVerificationModel?.VeriStatus));
-                summary.Children.Add(CreateFormEntry("Unit Establishment Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.UnitEstDate), true));
-                summary.Children.Add(CreateFormEntry("GST Registration Number*", _apiData.phyVerificationModel?.UnitGSTNo ?? ""));
-                summary.Children.Add(CreateFormEntry("Udyam Registration Number", _apiData.phyVerificationModel?.UnitUdyamRegNo ?? ""));
-                summary.Children.Add(CreateFormEntry("Unit Location*", _apiData.phyVerificationModel?.UnitLocation ?? ""));
-                summary.Children.Add(CreateFormEntry("Unit Sponsored By*", _apiData.applicantData?.AgencyCode ?? ""));
-                summary.Children.Add(CreateFormEntry("Longitude*", _apiData.phyVerificationModel?.Longitude ?? ""));
+                summary.Children.Add(CreateFormEntry("Unit Establishment Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.UnitEstDate), true, false, false, true));
+                summary.Children.Add(CreateFormEntry("GST Registration Number*", _apiData.phyVerificationModel?.UnitGSTNo ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Udyam Registration Number", _apiData.phyVerificationModel?.UnitUdyamRegNo ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Unit Location*", _apiData.phyVerificationModel?.UnitLocation ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Unit Sponsored By*", _apiData.applicantData?.AgencyCode ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Longitude*", _apiData.phyVerificationModel?.Longitude ?? "", false, false, false, true));
+
                 string industryType = _apiData.applicantData?.SchemeID == "1" ? "Manufacturing" : "Service";
-                summary.Children.Add(CreateFormEntry("Industry Type*", industryType));
-                summary.Children.Add(CreateFormEntry("Latitude*", _apiData.phyVerificationModel?.Latitude ?? ""));
-                summary.Children.Add(CreateFormEntry("Geo Tagging ID*", _apiData.phyVerificationModel?.GeoTagID ?? ""));
+                summary.Children.Add(CreateFormEntry("Industry Type*", industryType, false, false, false, true));
+
+                summary.Children.Add(CreateFormEntry("Latitude*", _apiData.phyVerificationModel?.Latitude ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Geo Tagging ID*", _apiData.phyVerificationModel?.GeoTagID ?? "", false, false, false, true));
+
             }
             return summary;
         }
@@ -2248,11 +2258,19 @@ namespace PMEGP_Physical_V
             var summary = new StackLayout { Spacing = 16 };
             if (_apiData != null)
             {
-                summary.Children.Add(CreateFormEntry("EDP Completed*", ConvertUnixToDate(_apiData.edpTrainingModel?.TrDateTo), true, true));
-                summary.Children.Add(CreateFormEntry("EDP Training Period*", _apiData.phyVerificationModel?.EDPPeriod ?? ""));
-                summary.Children.Add(CreateFormEntry("Name of Institute*", _apiData.edpTrainingModel?.EDPTCName ?? ""));
-                var addressFrame = CreateMultilineEntry("Address of Institute*", _apiData.edpTrainingModel?.EDPAddress ?? "");
+                summary.Children.Add(CreateFormEntry("EDP Completed*", ConvertUnixToDate(_apiData.edpTrainingModel?.TrDateTo), true, true, false, true));
+                summary.Children.Add(CreateFormEntry("EDP Training Period*", _apiData.phyVerificationModel?.EDPPeriod ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Name of Institute*", _apiData.edpTrainingModel?.EDPTCName ?? "", false, false, false, true));
+
+                var addressFrame = CreateMultilineEntry(
+    "Address of Institute*",
+    _apiData.edpTrainingModel?.EDPAddress ?? "",
+    false,
+    false,
+    true   // this makes it non-editable
+);
                 summary.Children.Add(addressFrame);
+
             }
             return summary;
         }
@@ -2262,12 +2280,13 @@ namespace PMEGP_Physical_V
             var summary = new StackLayout { Spacing = 16 };
             if (_apiData != null)
             {
-                summary.Children.Add(CreateFormEntry("Project Sanctioned Date*", ConvertUnixToDate(_apiData.bankProcess?.SancDate), true, true));
-                summary.Children.Add(CreateFormEntry("Scheme under which project got sanctioned*", _apiData.phyVerificationModel?.SanctionedScheme ?? ""));
-                summary.Children.Add(CreateFormEntry("Capital Expenditure*", _apiData.bankProcess?.CapitalExpd?.ToString("F2") ?? ""));
-                summary.Children.Add(CreateFormEntry("Working Capital*", _apiData.bankProcess?.WorkingCapital?.ToString("F2") ?? ""));
-                summary.Children.Add(CreateFormEntry("Own Contribution*", _apiData.bankProcess?.DepAmount?.ToString("F2") ?? ""));
-                summary.Children.Add(CreateFormEntry("Total*", _apiData.bankProcess?.TotalProjectCost?.ToString("F2") ?? ""));
+                summary.Children.Add(CreateFormEntry("Project Sanctioned Date*", ConvertUnixToDate(_apiData.bankProcess?.SancDate), true, true, false, true));
+                summary.Children.Add(CreateFormEntry("Scheme under which project got sanctioned*", _apiData.phyVerificationModel?.SanctionedScheme ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Capital Expenditure*", _apiData.bankProcess?.CapitalExpd?.ToString("F2") ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Working Capital*", _apiData.bankProcess?.WorkingCapital?.ToString("F2") ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Own Contribution*", _apiData.bankProcess?.DepAmount?.ToString("F2") ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Total*", _apiData.bankProcess?.TotalProjectCost?.ToString("F2") ?? "", false, false, false, true));
+
             }
             return summary;
         }
@@ -2277,11 +2296,14 @@ namespace PMEGP_Physical_V
             var summary = new StackLayout { Spacing = 16 };
             if (_apiData != null)
             {
-                summary.Children.Add(CreateFormEntry("Financing Bank*", _apiData.applicantData?.FinBank1 ?? "", false, true));
-                summary.Children.Add(CreateFormEntry("Bank Branch*", _apiData.applicantData?.BankBranch1 ?? ""));
-                var bankAddressFrame = CreateMultilineEntry("Bank Address*", _apiData.applicantData?.BankAddress1 ?? "");
+                summary.Children.Add(CreateFormEntry("Financing Bank*", _apiData.applicantData?.FinBank1 ?? "", false, true, false, true));
+                summary.Children.Add(CreateFormEntry("Bank Branch*", _apiData.applicantData?.BankBranch1 ?? "", false, false, false, true));
+
+                var bankAddressFrame = CreateMultilineEntry("Bank Address*", _apiData.applicantData?.BankAddress1 ?? "", false, false, true);
                 summary.Children.Add(bankAddressFrame);
-                summary.Children.Add(CreateFormEntry("IFSC code*", _apiData.applicantData?.BankIFSC1 ?? ""));
+
+                summary.Children.Add(CreateFormEntry("IFSC code*", _apiData.applicantData?.BankIFSC1 ?? "", false, false, false, true));
+
             }
             return summary;
         }
@@ -2291,15 +2313,20 @@ namespace PMEGP_Physical_V
             var summary = new StackLayout { Spacing = 16 };
             if (_apiData != null)
             {
-                var annualProductionFrame = CreateFormEntry("Annual Production-Value", _apiData.phyVerificationModel?.AnlProdVal?.ToString("F2") ?? "", false, true);
+                var annualProductionFrame = CreateFormEntry("Annual Production-Value", _apiData.phyVerificationModel?.AnlProdVal?.ToString("F2") ?? "", false, true, false, true);
                 summary.Children.Add(annualProductionFrame);
-                var annualSalesFrame = CreateFormEntry("Annual Sales-Value", _apiData.phyVerificationModel?.AnlSaleVal?.ToString("F2") ?? "");
+
+                var annualSalesFrame = CreateFormEntry("Annual Sales-Value", _apiData.phyVerificationModel?.AnlSaleVal?.ToString("F2") ?? "", false, false, false, true);
                 summary.Children.Add(annualSalesFrame);
-                var productDescFrame = CreateMultilineEntry("Product Details-Main Product", _apiData.applicantData?.ProdDescr2 ?? "");
+
+                var productDescFrame = CreateMultilineEntry("Product Details-Main Product", _apiData.applicantData?.ProdDescr2 ?? "", false, false, true);
                 summary.Children.Add(productDescFrame);
-                var exportValueFrame = CreateFormEntry("Export Detail - value*", _apiData.phyVerificationModel?.ExportDetails?.ToString("F2") ?? "");
+
+                var exportValueFrame = CreateFormEntry("Export Detail - value*", _apiData.phyVerificationModel?.ExportDetails?.ToString("F2") ?? "", false, false, false, true);
                 summary.Children.Add(exportValueFrame);
-                summary.Children.Add(CreateFormEntry("Export Detail - Country of Export*", _apiData.phyVerificationModel?.ExportDetCount ?? ""));
+
+                summary.Children.Add(CreateFormEntry("Export Detail - Country of Export*", _apiData.phyVerificationModel?.ExportDetCount ?? "", false, false, false, true));
+
             }
             return summary;
         }
@@ -2309,20 +2336,22 @@ namespace PMEGP_Physical_V
             var summary = new StackLayout { Spacing = 16 };
             if (_apiData != null)
             {
-                summary.Children.Add(CreateFormEntry("Male*", _apiData.phyVerificationModel?.EmpMale?.ToString() ?? "", false, true));
-                summary.Children.Add(CreateFormEntry("Female*", _apiData.phyVerificationModel?.EmpFemale?.ToString() ?? ""));
-                summary.Children.Add(CreateFormEntry("Transgender*", _apiData.phyVerificationModel?.EmpTransgender?.ToString() ?? ""));
-                summary.Children.Add(CreateFormEntry("General*", _apiData.phyVerificationModel?.EmpGEN?.ToString() ?? ""));
-                summary.Children.Add(CreateFormEntry("SC*", _apiData.phyVerificationModel?.EmpSC?.ToString() ?? ""));
-                summary.Children.Add(CreateFormEntry("ST*", _apiData.phyVerificationModel?.EmpST?.ToString() ?? ""));
-                summary.Children.Add(CreateFormEntry("OBC*", _apiData.phyVerificationModel?.EmpOBC?.ToString() ?? ""));
-                summary.Children.Add(CreateFormEntry("Minority*", _apiData.phyVerificationModel?.EmpMinority?.ToString() ?? ""));
-                summary.Children.Add(CreateFormEntry("Full-Time Employees", "0"));
-                summary.Children.Add(CreateFormEntry("Part-Time Employees", "0"));
-                summary.Children.Add(CreateFormEntry("Seasonal Employees", "0"));
-                summary.Children.Add(CreateFormEntry("Total Number Of Employees*", _apiData.phyVerificationModel?.TotalEMP?.ToString() ?? ""));
-                var wagesFrame = CreateFormEntry("Average Wages paid per employee per month", _apiData.phyVerificationModel?.AvgWgPaidPerMonth?.ToString("F2") ?? "");
+                summary.Children.Add(CreateFormEntry("Male*", _apiData.phyVerificationModel?.EmpMale?.ToString() ?? "", false, true, false, true));
+                summary.Children.Add(CreateFormEntry("Female*", _apiData.phyVerificationModel?.EmpFemale?.ToString() ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Transgender*", _apiData.phyVerificationModel?.EmpTransgender?.ToString() ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("General*", _apiData.phyVerificationModel?.EmpGEN?.ToString() ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("SC*", _apiData.phyVerificationModel?.EmpSC?.ToString() ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("ST*", _apiData.phyVerificationModel?.EmpST?.ToString() ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("OBC*", _apiData.phyVerificationModel?.EmpOBC?.ToString() ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Minority*", _apiData.phyVerificationModel?.EmpMinority?.ToString() ?? "", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Full-Time Employees", "0", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Part-Time Employees", "0", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Seasonal Employees", "0", false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Total Number Of Employees*", _apiData.phyVerificationModel?.TotalEMP?.ToString() ?? "", false, false, false, true));
+
+                var wagesFrame = CreateFormEntry("Average Wages paid per employee per month", _apiData.phyVerificationModel?.AvgWgPaidPerMonth?.ToString("F2") ?? "", false, false, false, true);
                 summary.Children.Add(wagesFrame);
+
             }
             return summary;
         }
@@ -2344,10 +2373,12 @@ namespace PMEGP_Physical_V
                     _apiData.phyVerificationModel?.VeriStatus == "WR" ? "Completed" : "Pending",
                     false, true, true);
                 summary.Children.Add(verificationStatusFrame);
-                summary.Children.Add(CreateFormEntry("Verification Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.VerDate), true));
-                summary.Children.Add(CreateFormEntry("Verification Agency Name*", _apiData.phyVerificationModel?.VerAgencyName ?? ""));
-                var enumeratorRemarkFrame = CreateMultilineEntry("Enumerator Remark*", _apiData.phyVerificationModel?.EnumRem ?? "");
+                summary.Children.Add(CreateFormEntry("Verification Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.VerDate), true, false, false, true));
+                summary.Children.Add(CreateFormEntry("Verification Agency Name*", _apiData.phyVerificationModel?.VerAgencyName ?? "", false, false, false, true));
+
+                var enumeratorRemarkFrame = CreateMultilineEntry("Enumerator Remark*", _apiData.phyVerificationModel?.EnumRem ?? "", false, false, true);
                 summary.Children.Add(enumeratorRemarkFrame);
+
                 var signBoardSection = CreateSwitchSection("Prominent Sign Board installed", _apiData.phyVerificationModel?.IsSignBoardIns ?? false);
                 summary.Children.Add(signBoardSection);
             }
@@ -2400,14 +2431,14 @@ namespace PMEGP_Physical_V
         }
 
         // Updated CreateFormEntry to be non-editable
-        private Grid CreateFormEntry(string placeholder, string text = "", bool isDateField = false, bool isFirstField = false, bool forceEditable = false)
+        private Grid CreateFormEntry(string placeholder, string text = "", bool isDateField = false, bool isFirstField = false, bool forceEditable = false, bool forceReadOnly = false)
         {
             var grid = new Grid
             {
                 Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0)
             };
 
-            bool isReadOnly = !(_isEditable || forceEditable);
+            bool isReadOnly = forceReadOnly || !(_isEditable || forceEditable);
 
             // Always non-editable fields
             string[] readOnlyFields = new[]
@@ -2499,20 +2530,141 @@ namespace PMEGP_Physical_V
 
         private async Task OpenDatePicker(Entry targetEntry)
         {
-            // TODO: Implement date picker modal or use platform-specific date picker
-            // For now, placeholder implementation
-            await DisplayAlert("Date Picker", "Date picker to be implemented", "OK");
+            try
+            {
+                // Parse existing date or use today
+                DateTime selectedDate = DateTime.Today;
+                if (!string.IsNullOrEmpty(targetEntry.Text))
+                {
+                    if (DateTime.TryParseExact(targetEntry.Text, "dd-MM-yyyy",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out DateTime parsedDate))
+                    {
+                        selectedDate = parsedDate;
+                    }
+                }
+
+                // Show native date picker
+                var pickedDate = await DisplayPromptDateAsync(selectedDate);
+
+                if (pickedDate.HasValue)
+                {
+                    targetEntry.Text = pickedDate.Value.ToString("dd-MM-yyyy");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Date picker error: {ex.Message}");
+            }
+        }
+
+        private async Task<DateTime?> DisplayPromptDateAsync(DateTime initialDate)
+        {
+            // Create a modal with date picker
+            var modal = new AbsoluteLayout
+            {
+                BackgroundColor = Color.FromArgb("#AA000000"),
+                HorizontalOptions = LayoutOptions.Fill,
+                VerticalOptions = LayoutOptions.Fill
+            };
+
+            var contentFrame = new Frame
+            {
+                BackgroundColor = Colors.White,
+                CornerRadius = 15,
+                Padding = new Thickness(20),
+                WidthRequest = 320,
+                HasShadow = true
+            };
+
+            var datePicker = new DatePicker
+            {
+                Date = initialDate,
+                MinimumDate = new DateTime(1900, 1, 1),
+                MaximumDate = DateTime.Today.AddYears(10),
+                Format = "dd-MM-yyyy",
+                FontSize = 18
+            };
+
+            var buttonGrid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitionCollection
+        {
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+        },
+                ColumnSpacing = 10,
+                Margin = new Thickness(0, 20, 0, 0)
+            };
+
+            DateTime? result = null;
+            var tcs = new TaskCompletionSource<DateTime?>();
+
+            var cancelButton = new Button
+            {
+                Text = "CANCEL",
+                BackgroundColor = Color.FromArgb("#6C757D"),
+                TextColor = Colors.White,
+                CornerRadius = 10
+            };
+            cancelButton.Clicked += (s, e) =>
+            {
+                CloseCurrentModal();
+                tcs.TrySetResult(null);
+            };
+
+            var okButton = new Button
+            {
+                Text = "OK",
+                BackgroundColor = Color.FromArgb("#4CAF50"),
+                TextColor = Colors.White,
+                CornerRadius = 10
+            };
+            okButton.Clicked += (s, e) =>
+            {
+                result = datePicker.Date;
+                CloseCurrentModal();
+                tcs.TrySetResult(result);
+            };
+
+            Grid.SetColumn(cancelButton, 0);
+            Grid.SetColumn(okButton, 1);
+            buttonGrid.Children.Add(cancelButton);
+            buttonGrid.Children.Add(okButton);
+
+            var contentStack = new StackLayout
+            {
+                Spacing = 20,
+                Children = { datePicker, buttonGrid }
+            };
+
+            contentFrame.Content = contentStack;
+
+            AbsoluteLayout.SetLayoutBounds(contentFrame, new Rect(0.5, 0.5, AbsoluteLayout.AutoSize, AbsoluteLayout.AutoSize));
+            AbsoluteLayout.SetLayoutFlags(contentFrame, AbsoluteLayoutFlags.PositionProportional);
+
+            modal.Children.Add(contentFrame);
+            _currentModal = modal;
+
+            if (this.Content is Grid rootGrid)
+            {
+                Grid.SetRowSpan(modal, 3);
+                Grid.SetRow(modal, 0);
+                rootGrid.Children.Add(modal);
+            }
+
+            return await tcs.Task;
         }
 
         // Updated CreateMultilineEntry to be non-editable
-        private Grid CreateMultilineEntry(string placeholder, string text, bool isFirstField = false, bool forceEditable = false)
+        private Grid CreateMultilineEntry(string placeholder, string text, bool isFirstField = false, bool forceEditable = false, bool forceReadOnly = false)
         {
             var grid = new Grid
             {
                 Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0)
             };
 
-            bool isReadOnly = !(_isEditable || forceEditable);
+            bool isReadOnly = forceReadOnly || !(_isEditable || forceEditable);
 
             var editor = new Editor
             {
@@ -2633,7 +2785,7 @@ namespace PMEGP_Physical_V
             var container = new StackLayout
             {
                 Orientation = StackOrientation.Horizontal,
-                Spacing = 8,
+                Spacing = 5, // Reduced from 8
                 VerticalOptions = LayoutOptions.Center
             };
 
@@ -2641,13 +2793,13 @@ namespace PMEGP_Physical_V
             {
                 BackgroundColor = isSelected ? Color.FromArgb("#4CAF50") : Colors.Transparent,
                 BorderColor = Color.FromArgb("#4CAF50"),
-                CornerRadius = 12,
-                WidthRequest = 24,
-                HeightRequest = 24,
+                CornerRadius = 9, // Reduced from 12
+                WidthRequest = 18, // Reduced from 24
+                HeightRequest = 18, // Reduced from 24
                 Padding = 0,
                 HasShadow = false,
                 VerticalOptions = LayoutOptions.Center,
-                ClassId = text // Store the radio button value
+                ClassId = text
             };
 
             if (isSelected)
@@ -2655,9 +2807,9 @@ namespace PMEGP_Physical_V
                 var innerDot = new BoxView
                 {
                     BackgroundColor = Colors.White,
-                    WidthRequest = 10,
-                    HeightRequest = 10,
-                    CornerRadius = 5,
+                    WidthRequest = 8, // Reduced from 10
+                    HeightRequest = 8, // Reduced from 10
+                    CornerRadius = 4, // Reduced from 5
                     HorizontalOptions = LayoutOptions.Center,
                     VerticalOptions = LayoutOptions.Center
                 };
@@ -2667,15 +2819,15 @@ namespace PMEGP_Physical_V
             var label = new Label
             {
                 Text = text,
-                FontSize = 14,
+                FontSize = 12, // Reduced from 14
                 TextColor = enableInteraction ? Colors.Black : Color.FromArgb("#666666"),
-                VerticalOptions = LayoutOptions.Center
+                VerticalOptions = LayoutOptions.Center,
+                LineBreakMode = LineBreakMode.NoWrap
             };
 
             container.Children.Add(radioCircle);
             container.Children.Add(label);
 
-            // Add tap gesture if interaction is enabled
             if (enableInteraction)
             {
                 var tapGesture = new TapGestureRecognizer();
@@ -2792,66 +2944,345 @@ namespace PMEGP_Physical_V
 
         private async Task SaveBeneficiaryData()
         {
-            // TODO: Wire to API - collect form data and POST
-            System.Diagnostics.Debug.WriteLine("SaveBeneficiaryData called");
-            await Task.Delay(100); // Simulate API call
+            // Skip API call for Beneficiary section
+            System.Diagnostics.Debug.WriteLine("Beneficiary data saved locally (no API call)");
+            await Task.CompletedTask;
         }
 
         private async Task SaveUnitDetailData()
         {
-            // TODO: Wire to API
-            // Collect: UnitName, UpdatedAddress, VerificationStatus, EstablishmentDate,
-            // GST, Udyam, Location, SponsoredBy, AgencyOffice, Lat, Long, GeoTagID
-            System.Diagnostics.Debug.WriteLine("SaveUnitDetailData called");
-            await Task.Delay(100);
+            try
+            {
+                var payload = new
+                {
+                    ApplID = _applId,
+                    UnitName = FindEntryValue("UnitName"),
+                    UnitAddr = FindEditorValue("UpdatedUnitAddress"),
+                    VeriStatus = GetVerificationStatusCode(),
+                    UnitArea = FindEntryValue("UnitArea") ?? "",
+                    UnitEstDate = ConvertToApiDateFormat(FindEntryValue("UnitEstablishmentDate")),
+                    UnitGSTNo = FindEntryValue("GSTRegistrationNumber"),
+                    UnitUdyamRegNo = FindEntryValue("UdyamRegistrationNumber"),
+                    UnitLocation = FindEntryValue("UnitLocation"),
+                    GeoTagID = FindEntryValue("GeoTaggingID"),
+                    Longitude = FindEntryValue("Longitude"),
+                    Latitude = FindEntryValue("Latitude")
+                };
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Failed to save Unit Detail: {ex.Message}", "OK");
+            }
         }
 
         private async Task SaveEDPTrainingData()
         {
-            // TODO: Wire to API - collect EDP training period
-            System.Diagnostics.Debug.WriteLine("SaveEDPTrainingData called");
-            await Task.Delay(100);
+            try
+            {
+                var payload = new
+                {
+                    ApplID = _applId,
+                    EDPPeriod = FindEntryValue("EDPTrainingPeriod"),
+                    EDPInsAdress = FindEditorValue("AddressofInstitute")
+                };
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Failed to save EDP Training: {ex.Message}", "OK");
+            }
         }
 
         private async Task SaveProjectDetailData()
         {
-            // TODO: Wire to API - collect scheme and project details
-            System.Diagnostics.Debug.WriteLine("SaveProjectDetailData called");
-            await Task.Delay(100);
+            // Project detail is read-only, no save needed
+            await Task.CompletedTask;
+        }
+
+        private async Task FinalSubmit()
+        {
+            try
+            {
+                var payload = new
+                {
+                    ApplID = _applId,
+                    isUnitVerDone = true
+                };
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+
+                await DisplayAlert("Success", "Unit verification completed successfully!", "OK");
+                await Navigation.PopAsync();
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Final submission failed: {ex.Message}", "OK");
+            }
         }
 
         private async Task SaveProductSalesData()
         {
-            // TODO: Wire to API - collect product dropdown, export country
-            System.Diagnostics.Debug.WriteLine("SaveProductSalesData called");
-            await Task.Delay(100);
+            try
+            {
+                var payload = new
+                {
+                    ApplID = _applId,
+                    AnlProdVal = FindEntryValue("AnnualProduction-Value"),
+                    AnlSaleVal = FindEntryValue("AnnualSales-Value"),
+                    ProdDetails = FindPickerValue("ProductDetails"),
+                    ExportDetails = FindEntryValue("ExportDetail-value"),
+                    ExportDetCount = FindEntryValue("ExportDetail-CountryofExport")
+                };
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Failed to save Product & Sales: {ex.Message}", "OK");
+            }
         }
 
         private async Task SaveEmploymentData()
         {
-            // TODO: Wire to API - collect Full-Time, Part-Time, Seasonal employees
-            System.Diagnostics.Debug.WriteLine("SaveEmploymentData called");
-            await Task.Delay(100);
+            try
+            {
+                var payload = new
+                {
+                    ApplID = _applId,
+                    EmpMale = FindEntryValue("Male"),
+                    EmpFemale = FindEntryValue("Female"),
+                    EmpTransgender = FindEntryValue("Transgender"),
+                    EmpGEN = FindEntryValue("General"),
+                    EmpSC = FindEntryValue("SC"),
+                    EmpST = FindEntryValue("ST"),
+                    EmpOBC = FindEntryValue("OBC"),
+                    EmpMinority = FindEntryValue("Minority"),
+                    FullTime_Emp = FindEntryValue("Full-TimeEmployees"),
+                    PartTime_Emp = FindEntryValue("Part-TimeEmployees"),
+                    Seasonal_Emp = FindEntryValue("SeasonalEmployees"),
+                    TotalEMP = FindEntryValue("TotalNumberOfEmployees"),
+                    AvgWgPaidPerMonth = FindEntryValue("AverageWagespaidperemployeepermonth")
+                };
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Failed to save Employment: {ex.Message}", "OK");
+            }
         }
 
         private async Task SaveDocumentData()
         {
-            // TODO: Wire to API - upload new documents from _uploadedDocuments list
-            System.Diagnostics.Debug.WriteLine("SaveDocumentData called");
-            foreach (var doc in _uploadedDocuments)
+            try
             {
-                System.Diagnostics.Debug.WriteLine($"  - {doc.DocType}: {doc.DocName}");
+                // TODO: Implement document upload API
+                // Upload documents from _uploadedDocuments list
+                System.Diagnostics.Debug.WriteLine("Document upload to be implemented");
+                await Task.CompletedTask;
             }
-            await Task.Delay(100);
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Failed to save documents: {ex.Message}", "OK");
+            }
         }
 
         private async Task SaveVerificationData()
         {
-            // TODO: Wire to API - collect verification status, enumerator remark, signboard status
-            System.Diagnostics.Debug.WriteLine("SaveVerificationData called");
-            await Task.Delay(100);
+            try
+            {
+                var payload = new
+                {
+                    ApplID = _applId,
+                    VerStatus = FindPickerValue("VerificationStatus") == "Completed" ? "1" : "2",
+                    VerDate = ConvertToApiDateFormat(FindEntryValue("VerificationDate")),
+                    VerAgencyName = FindEntryValue("VerificationAgencyName"),
+                    EnumRem = FindEditorValue("EnumeratorRemark"),
+                    IsSignBoardIns = FindSwitchValue("ProminentSignBoardinstalled") ? 1 : 0
+                };
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Failed to save Verification: {ex.Message}", "OK");
+            }
         }
 
+        private async Task CallSaveApi(string url, object payload)
+        {
+            try
+            {
+                var jsonPayload = JsonSerializer.Serialize(payload);
+                var content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync(url, content);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    System.Diagnostics.Debug.WriteLine($"API Success: {responseContent}");
+                    await DisplayAlert("Success", "Data saved successfully", "OK");
+                }
+                else
+                {
+                    throw new Exception($"API Error: {response.StatusCode}");
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new Exception($"Network error: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Save failed: {ex.Message}");
+            }
+        }
+
+        private string FindEntryValue(string placeholder)
+        {
+            // Search through ContentContainer for Entry with matching text
+            foreach (var child in ContentContainer.Children)
+            {
+                if (child is StackLayout stack)
+                {
+                    foreach (var item in stack.Children)
+                    {
+                        if (item is Grid grid)
+                        {
+                            var label = grid.Children.OfType<Label>().FirstOrDefault(l => l.Text?.Replace("*", "").Replace(" ", "").Replace(":", "").Replace("-", "") == placeholder.Replace("*", "").Replace(" ", "").Replace(":", "").Replace("-", ""));
+                            if (label != null)
+                            {
+                                var entry = grid.Children.OfType<Entry>().FirstOrDefault();
+                                return entry?.Text ?? "";
+                            }
+                        }
+                    }
+                }
+            }
+            return "";
+        }
+
+        private string FindEditorValue(string placeholder)
+        {
+            foreach (var child in ContentContainer.Children)
+            {
+                if (child is StackLayout stack)
+                {
+                    foreach (var item in stack.Children)
+                    {
+                        if (item is Grid grid)
+                        {
+                            var label = grid.Children.OfType<Label>().FirstOrDefault(l => l.Text?.Replace("*", "").Replace(" ", "").Replace(":", "") == placeholder.Replace("*", "").Replace(" ", "").Replace(":", ""));
+                            if (label != null)
+                            {
+                                var editor = grid.Children.OfType<Editor>().FirstOrDefault();
+                                return editor?.Text ?? "";
+                            }
+                        }
+                    }
+                }
+            }
+            return "";
+        }
+
+        private string FindPickerValue(string placeholder)
+        {
+            foreach (var child in ContentContainer.Children)
+            {
+                if (child is StackLayout stack)
+                {
+                    foreach (var item in stack.Children)
+                    {
+                        if (item is Grid grid)
+                        {
+                            var picker = grid.Children.OfType<Picker>().FirstOrDefault(p => p.Title?.Replace("*", "") == placeholder.Replace("*", ""));
+                            if (picker != null && picker.SelectedItem != null)
+                            {
+                                return picker.SelectedItem.ToString();
+                            }
+                        }
+                    }
+                }
+            }
+            return "";
+        }
+
+        private bool FindSwitchValue(string text)
+        {
+            foreach (var child in ContentContainer.Children)
+            {
+                if (child is StackLayout stack)
+                {
+                    foreach (var item in stack.Children)
+                    {
+                        if (item is StackLayout switchStack)
+                        {
+                            var label = switchStack.Children.OfType<Label>().FirstOrDefault(l => l.Text?.Replace(" ", "") == text.Replace(" ", ""));
+                            if (label != null)
+                            {
+                                var switchControl = switchStack.Children.OfType<Switch>().FirstOrDefault();
+                                return switchControl?.IsToggled ?? false;
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        private string GetVerificationStatusCode()
+        {
+            // Find selected radio button
+            foreach (var child in ContentContainer.Children)
+            {
+                if (child is StackLayout stack)
+                {
+                    foreach (var item in stack.Children)
+                    {
+                        if (item is StackLayout radioGroup && radioGroup.Orientation == StackOrientation.Horizontal)
+                        {
+                            foreach (var radioContainer in radioGroup.Children.OfType<StackLayout>())
+                            {
+                                var radioFrame = radioContainer.Children.FirstOrDefault() as Frame;
+                                if (radioFrame != null && radioFrame.BackgroundColor == Color.FromArgb("#4CAF50"))
+                                {
+                                    return radioFrame.ClassId switch
+                                    {
+                                        "Working" => "WR",
+                                        "Defunct" => "DF",
+                                        "Non-Traceable" => "NT",
+                                        _ => "WR"
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return "WR";
+        }
+
+        private string ConvertToApiDateFormat(string dateText)
+        {
+            if (string.IsNullOrEmpty(dateText)) return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+
+            try
+            {
+                if (DateTime.TryParseExact(dateText, "dd-MM-yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out DateTime date))
+                {
+                    return date.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                }
+            }
+            catch { }
+
+            return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+        }
 
 
         private Frame CreateMapPlaceholder()
