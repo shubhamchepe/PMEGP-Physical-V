@@ -1,5 +1,6 @@
 ﻿#nullable enable
 
+using Microsoft.Maui.Layouts;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -113,6 +114,7 @@ namespace PMEGP_Physical_V
         public bool IsInProgress => Status == "In Progress";
         public string PhoneNumber { get; set; } = string.Empty;
         public string UnitFullAddress { get; set; } = string.Empty;
+        public bool IsUnitVerDone { get; set; } = false;
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -132,6 +134,7 @@ namespace PMEGP_Physical_V
         private bool _isLoading;
         private string _errorMessage = string.Empty;
         private string _searchText = string.Empty;
+
 
         public ObservableCollection<ApplicantViewModel> Applicants
         {
@@ -283,6 +286,7 @@ namespace PMEGP_Physical_V
             var viewModel = new ApplicantViewModel
             {
                 ApplID = data.ApplID,
+                IsUnitVerDone = data.IsUnitVerDone ?? false,
                 Id = data.ApplCode,
                 Name = data.ApplName,
                 DateOfSubmission = ParseDateFromJson(data.FinalSubDate)
@@ -369,8 +373,8 @@ namespace PMEGP_Physical_V
             }
 
             // Apply conditional icon paths
-            viewModel.DocumentsIconPath = data.IsUnitVerDone == true ? "docs_green.png" : "docs_orange.png";
-            viewModel.BriefcaseIconPath = data.IsBankVerDone == true ? "brief_green.png" : "brief_orange.png";
+            viewModel.DocumentsIconPath = data.IsBankVerDone == true ? "docs_green.png" : "docs_orange.png";
+            viewModel.BriefcaseIconPath = data.IsUnitVerDone == true ? "brief_green.png" : "brief_orange.png";
 
             return viewModel;
         }
@@ -669,13 +673,21 @@ namespace PMEGP_Physical_V
         {
             try
             {
-                // Get the tapped frame and extract applID from its BindingContext
                 if (sender is Frame frame && frame.BindingContext is ApplicantViewModel applicant)
                 {
-                    // Use the ApplID from the viewmodel
-                    int applID = applicant.ApplID;
+                    // Check if traceability status is unknown/not traceable
+                    if (applicant.TraceabilityStatus == "Not Traceable")
+                    {
+                        var remarks = await ShowRemarksModal("Traceability Status", "📍");
+                        if (remarks != null)
+                        {
+                            // TODO: Save remarks to API if needed
+                            System.Diagnostics.Debug.WriteLine($"Traceability Remarks: {remarks}");
+                        }
+                        return;
+                    }
 
-                    // Navigate to ApplicantDetailsPage
+                    int applID = applicant.ApplID;
                     var detailsPage = new ApplicantDetailsPage(applID);
                     await Navigation.PushAsync(detailsPage);
                 }
@@ -683,6 +695,134 @@ namespace PMEGP_Physical_V
             catch (Exception ex)
             {
                 await DisplayAlert("Error", $"Unable to open applicant details: {ex.Message}", "OK");
+            }
+        }
+
+        // ADD this new method at the end of DetailsPage class
+        private Task<string> ShowRemarksModal(string title, string icon)
+        {
+            var tcs = new TaskCompletionSource<string>();
+
+            var modal = new AbsoluteLayout
+            {
+                BackgroundColor = Color.FromArgb("#AA000000"),
+                HorizontalOptions = LayoutOptions.Fill,
+                VerticalOptions = LayoutOptions.Fill
+            };
+
+            var contentFrame = new Frame
+            {
+                BackgroundColor = Colors.White,
+                BorderColor = Color.FromArgb("#E0E0E0"),
+                CornerRadius = 15,
+                Padding = new Thickness(25),
+                WidthRequest = 340,
+                HasShadow = true
+            };
+
+            var contentStack = new StackLayout { Spacing = 20 };
+
+            // Icon at top
+            var iconLabel = new Label
+            {
+                Text = icon,
+                FontSize = 50,
+                HorizontalOptions = LayoutOptions.Center
+            };
+
+            // Heading
+            var headingLabel = new Label
+            {
+                Text = title,
+                FontSize = 18,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Color.FromArgb("#333333"),
+                HorizontalTextAlignment = TextAlignment.Center
+            };
+
+            // Remarks textbox
+            var remarksEditor = new Editor
+            {
+                Placeholder = "Enter your remarks here...",
+                FontSize = 16,
+                HeightRequest = 120,
+                BackgroundColor = Color.FromArgb("#F5F5F5")
+            };
+
+            // Buttons
+            var buttonGrid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitionCollection
+        {
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+        },
+                ColumnSpacing = 15
+            };
+
+            var cancelButton = new Button
+            {
+                Text = "CANCEL",
+                BackgroundColor = Color.FromArgb("#6C757D"),
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
+                HeightRequest = 45
+            };
+            cancelButton.Clicked += (s, e) =>
+            {
+                RemoveModal(modal);
+                tcs.TrySetResult(null);
+            };
+
+            var yesButton = new Button
+            {
+                Text = "YES",
+                BackgroundColor = Color.FromArgb("#4CAF50"),
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
+                HeightRequest = 45
+            };
+            yesButton.Clicked += (s, e) =>
+            {
+                var remarks = remarksEditor.Text;
+                RemoveModal(modal);
+                tcs.TrySetResult(remarks);
+            };
+
+            Grid.SetColumn(cancelButton, 0);
+            Grid.SetColumn(yesButton, 1);
+            buttonGrid.Children.Add(cancelButton);
+            buttonGrid.Children.Add(yesButton);
+
+            contentStack.Children.Add(iconLabel);
+            contentStack.Children.Add(headingLabel);
+            contentStack.Children.Add(remarksEditor);
+            contentStack.Children.Add(buttonGrid);
+
+            contentFrame.Content = contentStack;
+
+            AbsoluteLayout.SetLayoutBounds(contentFrame, new Rect(0.5, 0.5, AbsoluteLayout.AutoSize, AbsoluteLayout.AutoSize));
+            AbsoluteLayout.SetLayoutFlags(contentFrame, AbsoluteLayoutFlags.PositionProportional);
+
+            modal.Children.Add(contentFrame);
+
+            if (this.Content is Grid rootGrid)
+            {
+                Grid.SetRowSpan(modal, 3);
+                Grid.SetRow(modal, 0);
+                rootGrid.Children.Add(modal);
+            }
+
+            return tcs.Task;
+        }
+
+        private void RemoveModal(AbsoluteLayout modal)
+        {
+            if (this.Content is Grid rootGrid)
+            {
+                rootGrid.Children.Remove(modal);
             }
         }
 
@@ -862,7 +1002,7 @@ namespace PMEGP_Physical_V
             {
                 // Extract badge status and pass to UnitVerificationPage
                 string badgeStatus = applicant.Status?.Trim() ?? "Pending";
-                var unitVerificationPage = new UnitVerificationPage(applicant.ApplID, badgeStatus);
+                var unitVerificationPage = new UnitVerificationPage(applicant.ApplID, badgeStatus, applicant.IsUnitVerDone);
                 await Navigation.PushAsync(unitVerificationPage);
             }
             catch (Exception ex)
@@ -954,6 +1094,7 @@ namespace PMEGP_Physical_V
             Color textColor = Color.FromArgb("#4CAF50");       // Green
             string iconSource = "geo.png";
             string displayText = "Traceable";
+            bool isUnknownStatus = false; // NEW: Track if status is Unknown
 
             // Apply dynamic styles based on status
             switch (status?.Trim())
@@ -984,6 +1125,7 @@ namespace PMEGP_Physical_V
                     textColor = Color.FromArgb("#666666");
                     iconSource = "unknown.png";
                     displayText = "Unknown";
+                    isUnknownStatus = true; // NEW: Mark as unknown
                     break;
             }
 
@@ -1035,6 +1177,22 @@ namespace PMEGP_Physical_V
             contentGrid.Children.Add(iconImage);
             contentGrid.Children.Add(textLabel);
             buttonFrame.Content = contentGrid;
+
+            // NEW: Add tap gesture for Unknown status
+            if (isUnknownStatus)
+            {
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += async (s, e) =>
+                {
+                    var remarks = await ShowRemarksModal("Unknown Traceability Status", "📍");
+                    if (remarks != null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Unknown Status Remarks: {remarks}");
+                        // TODO: Save remarks to API if needed
+                    }
+                };
+                buttonFrame.GestureRecognizers.Add(tapGesture);
+            }
 
             return buttonFrame;
         }

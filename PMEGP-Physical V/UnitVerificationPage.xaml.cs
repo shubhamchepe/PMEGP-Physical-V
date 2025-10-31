@@ -280,7 +280,9 @@ namespace PMEGP_Physical_V
         private ImageApiResponse _imageData = null;
         private readonly string _badgeStatus;
         private bool _isEditable = false;
+        private readonly bool _isUnitVerDone;
         private Dictionary<int, Dictionary<string, object>> _stepData = new Dictionary<int, Dictionary<string, object>>();
+        private string _previousVerificationStatus = "WR"; // Track previous status
 
         private readonly Dictionary<int, StepInfo> _stepInfos = new Dictionary<int, StepInfo>
         {
@@ -297,11 +299,12 @@ namespace PMEGP_Physical_V
         };
 
         // Modified constructor to accept ApplID
-        public UnitVerificationPage(int applId, string badgeStatus = "Completed")
+        public UnitVerificationPage(int applId, string badgeStatus = "Completed", bool isUnitVerDone = false)
         {
             InitializeComponent();
             _applId = applId;
             _badgeStatus = badgeStatus?.Trim() ?? "Completed";
+            _isUnitVerDone = isUnitVerDone;
 
             _isEditable = !string.Equals(_badgeStatus, "Completed", StringComparison.OrdinalIgnoreCase);
 
@@ -784,6 +787,13 @@ namespace PMEGP_Physical_V
 
                 var statusSection = CreateVerificationStatusSection(_apiData.phyVerificationModel?.VeriStatus, _isEditable);
                 form.Children.Add(statusSection);
+
+                if (!string.IsNullOrEmpty(_apiData.phyVerificationModel?.VeriStatus))
+                {
+                    _previousVerificationStatus = _apiData.phyVerificationModel.VeriStatus == "WR" ? "Working" :
+                                                   _apiData.phyVerificationModel.VeriStatus == "DF" ? "Defunct" :
+                                                   _apiData.phyVerificationModel.VeriStatus == "NT" ? "Non-Traceable" : "Working";
+                }
 
                 form.Children.Add(CreateFormEntry("Unit Establishment Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.UnitEstDate), true, false, _isEditable));
                 form.Children.Add(CreateFormEntry("GST Registration Number*", _apiData.phyVerificationModel?.UnitGSTNo ?? "", false, false, _isEditable));
@@ -1664,36 +1674,83 @@ namespace PMEGP_Physical_V
                     return;
                 }
 
-                // Add to uploaded documents list
-                var uploadItem = new DocumentUploadItem
-                {
-                    DocType = docTypePicker.SelectedItem.ToString(),
-                    DocName = docNameEntry.Text,
-                    FilePath = fileNameLabel.ClassId
-                };
-
-                // Read file data
                 try
                 {
-                    using (var stream = await FileSystem.OpenAppPackageFileAsync(uploadItem.FilePath))
+                    // Read file and convert to base64
+                    var filePath = fileNameLabel.ClassId;
+                    byte[] fileBytes;
+
+                    using (var stream = File.OpenRead(filePath))
                     using (var memoryStream = new MemoryStream())
                     {
                         await stream.CopyToAsync(memoryStream);
-                        uploadItem.FileData = memoryStream.ToArray();
+                        fileBytes = memoryStream.ToArray();
+                    }
+
+                    var base64File = Convert.ToBase64String(fileBytes);
+                    var fileExtension = Path.GetExtension(filePath);
+
+                    // Get state info from API data
+                    var stateName = _apiData?.applicantData?.StateName ?? "Maharashtra";
+                    var stateCode = stateName == "Maharashtra" ? "27" : "00"; // Default logic
+                    var applCode = _apiData?.applicantData?.ApplCode ?? "";
+
+                    // Create document upload item
+                    var uploadItem = new DocumentUploadItem
+                    {
+                        DocType = docTypePicker.SelectedItem.ToString(),
+                        DocName = docNameEntry.Text,
+                        FilePath = filePath,
+                        FileData = fileBytes
+                    };
+
+                    // Prepare API payload
+                    var documentPayload = new[]
+                    {
+            new
+            {
+                Base64File = base64File,
+                FileExtension = fileExtension,
+                DocDescription = docNameEntry.Text,
+                ApplID = _applId,
+                StateName = stateName,
+                StateCode = stateCode,
+                ApplCode = applCode,
+                DocType = docTypePicker.SelectedItem.ToString()
+            }
+        };
+
+                    var jsonPayload = JsonSerializer.Serialize(documentPayload);
+                    var content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
+
+                    System.Diagnostics.Debug.WriteLine($"Uploading document: {docNameEntry.Text}");
+
+                    // Call upload API
+                    var response = await _httpClient.PostAsync(
+                        "https://115.124.125.153/MobileApp/UploadAllDocumentsUV",
+                        content
+                    );
+
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    System.Diagnostics.Debug.WriteLine($"Upload Response: {responseContent}");
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        _uploadedDocuments.Add(uploadItem);
+                        await DisplayAlert("Success", "Document uploaded successfully", "OK");
+                        CloseCurrentModal();
+                        LoadStepContent(8); // Reload step 8
+                    }
+                    else
+                    {
+                        throw new Exception($"Upload failed: {responseContent}");
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // File reading failed - continue anyway for demo
+                    System.Diagnostics.Debug.WriteLine($"Upload Error: {ex.Message}");
+                    await DisplayAlert("Error", $"Failed to upload document: {ex.Message}", "OK");
                 }
-
-                _uploadedDocuments.Add(uploadItem);
-
-                await DisplayAlert("Success", "Document uploaded successfully", "OK");
-                CloseCurrentModal();
-
-                // Refresh document table
-                LoadStepContent(8); // Reload step 8
             };
 
             // Close Button
@@ -1877,20 +1934,21 @@ namespace PMEGP_Physical_V
 
                 actionStack.Children.Add(viewButton);
 
-                bool showDeleteButton = !string.Equals(_badgeStatus, "Completed", StringComparison.OrdinalIgnoreCase) && isUploadedDoc;
-                // Add delete button only for uploaded documents in edit mode
+                bool isCompletedStatus = string.Equals(_badgeStatus, "Completed", StringComparison.OrdinalIgnoreCase);
+                bool showDeleteButton = !_isUnitVerDone && isUploadedDoc;
+
+                System.Diagnostics.Debug.WriteLine($"Delete button visibility - Badge Status: {_badgeStatus}, IsCompleted: {isCompletedStatus}, IsUploadedDoc: {isUploadedDoc}, ShowDelete: {showDeleteButton}");
+
                 if (showDeleteButton)
                 {
-                    var deleteButton = new Button
+                    var deleteButton = new ImageButton
                     {
-                        Text = "Delete",
-                        BackgroundColor = Color.FromArgb("#F44336"),
-                        TextColor = Colors.White,
-                        FontAttributes = FontAttributes.Bold,
+                        Source = "delete.png",
+                        BackgroundColor = Color.FromArgb("#FFFFFF"),
                         CornerRadius = 8,
                         HeightRequest = 35,
-                        WidthRequest = 60,
-                        FontSize = 12,
+                        WidthRequest = 35,
+                        Padding = new Thickness(8),
                         ClassId = i.ToString()
                     };
                     deleteButton.Clicked += async (s, e) =>
@@ -2785,7 +2843,7 @@ namespace PMEGP_Physical_V
             var container = new StackLayout
             {
                 Orientation = StackOrientation.Horizontal,
-                Spacing = 5, // Reduced from 8
+                Spacing = 5,
                 VerticalOptions = LayoutOptions.Center
             };
 
@@ -2793,9 +2851,9 @@ namespace PMEGP_Physical_V
             {
                 BackgroundColor = isSelected ? Color.FromArgb("#4CAF50") : Colors.Transparent,
                 BorderColor = Color.FromArgb("#4CAF50"),
-                CornerRadius = 9, // Reduced from 12
-                WidthRequest = 18, // Reduced from 24
-                HeightRequest = 18, // Reduced from 24
+                CornerRadius = 9,
+                WidthRequest = 18,
+                HeightRequest = 18,
                 Padding = 0,
                 HasShadow = false,
                 VerticalOptions = LayoutOptions.Center,
@@ -2807,9 +2865,9 @@ namespace PMEGP_Physical_V
                 var innerDot = new BoxView
                 {
                     BackgroundColor = Colors.White,
-                    WidthRequest = 8, // Reduced from 10
-                    HeightRequest = 8, // Reduced from 10
-                    CornerRadius = 4, // Reduced from 5
+                    WidthRequest = 8,
+                    HeightRequest = 8,
+                    CornerRadius = 4,
                     HorizontalOptions = LayoutOptions.Center,
                     VerticalOptions = LayoutOptions.Center
                 };
@@ -2819,7 +2877,7 @@ namespace PMEGP_Physical_V
             var label = new Label
             {
                 Text = text,
-                FontSize = 12, // Reduced from 14
+                FontSize = 12,
                 TextColor = enableInteraction ? Colors.Black : Color.FromArgb("#666666"),
                 VerticalOptions = LayoutOptions.Center,
                 LineBreakMode = LineBreakMode.NoWrap
@@ -2830,16 +2888,55 @@ namespace PMEGP_Physical_V
 
             if (enableInteraction)
             {
+                // NEW: Add tap gesture to the container
                 var tapGesture = new TapGestureRecognizer();
-                tapGesture.Tapped += (s, e) => OnRadioButtonTapped(radioCircle);
+                tapGesture.Tapped += async (s, e) => await OnRadioButtonTappedAsync(radioCircle);
                 container.GestureRecognizers.Add(tapGesture);
+
+                // NEW: Also add tap gesture to the radio circle itself
+                var radioTapGesture = new TapGestureRecognizer();
+                radioTapGesture.Tapped += async (s, e) => await OnRadioButtonTappedAsync(radioCircle);
+                radioCircle.GestureRecognizers.Add(radioTapGesture);
             }
 
             return container;
         }
 
-        private void OnRadioButtonTapped(Frame selectedRadio)
+        private async Task OnRadioButtonTappedAsync(Frame selectedRadio)
         {
+            var newStatus = selectedRadio.ClassId; // "Working", "Defunct", or "Non-Traceable"
+
+            // Check if changing from Working to Defunct or Non-Traceable
+            if (_previousVerificationStatus == "Working" && (newStatus == "Defunct" || newStatus == "Non-Traceable"))
+            {
+                var remarks = await ShowVerificationRemarksModal($"Changing to {newStatus}", "⚠️");
+                if (remarks == null)
+                {
+                    // User cancelled, don't change status
+                    return;
+                }
+
+                // Save remarks
+                System.Diagnostics.Debug.WriteLine($"Status change remarks: {remarks}");
+                // TODO: Store remarks to send with API
+            }
+            // Check if changing back to Working from Defunct/Non-Traceable
+            else if ((_previousVerificationStatus == "Defunct" || _previousVerificationStatus == "Non-Traceable") && newStatus == "Working")
+            {
+                var location = await ShowLocationMapModal();
+                if (location == null)
+                {
+                    // User cancelled, don't change status
+                    return;
+                }
+
+                // Update location fields
+                UpdateLocationFields(location.Value.latitude, location.Value.longitude);
+            }
+
+            // Update previous status
+            _previousVerificationStatus = newStatus;
+
             // Find parent StackLayout containing all radio buttons
             var parentStack = selectedRadio.Parent?.Parent as StackLayout;
             if (parentStack == null) return;
@@ -2863,13 +2960,414 @@ namespace PMEGP_Physical_V
             var innerDot = new BoxView
             {
                 BackgroundColor = Colors.White,
-                WidthRequest = 10,
-                HeightRequest = 10,
-                CornerRadius = 5,
+                WidthRequest = 8,
+                HeightRequest = 8,
+                CornerRadius = 4,
                 HorizontalOptions = LayoutOptions.Center,
                 VerticalOptions = LayoutOptions.Center
             };
             selectedRadio.Content = innerDot;
+        }
+
+        // ADD these helper methods at the end of UnitVerificationPage class
+        private Task<string> ShowVerificationRemarksModal(string title, string icon)
+        {
+            var tcs = new TaskCompletionSource<string>();
+
+            var modal = new AbsoluteLayout
+            {
+                BackgroundColor = Color.FromArgb("#AA000000"),
+                HorizontalOptions = LayoutOptions.Fill,
+                VerticalOptions = LayoutOptions.Fill
+            };
+
+            var contentFrame = new Frame
+            {
+                BackgroundColor = Colors.White,
+                BorderColor = Color.FromArgb("#E0E0E0"),
+                CornerRadius = 15,
+                Padding = new Thickness(25),
+                WidthRequest = 340,
+                HasShadow = true
+            };
+
+            var contentStack = new StackLayout { Spacing = 20 };
+
+            var iconLabel = new Label
+            {
+                Text = icon,
+                FontSize = 50,
+                HorizontalOptions = LayoutOptions.Center
+            };
+
+            var headingLabel = new Label
+            {
+                Text = title,
+                FontSize = 18,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Color.FromArgb("#333333"),
+                HorizontalTextAlignment = TextAlignment.Center
+            };
+
+            var remarksEditor = new Editor
+            {
+                Placeholder = "Enter your remarks here...",
+                FontSize = 16,
+                HeightRequest = 120,
+                BackgroundColor = Color.FromArgb("#F5F5F5")
+            };
+
+            var buttonGrid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitionCollection
+        {
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+        },
+                ColumnSpacing = 15
+            };
+
+            var cancelButton = new Button
+            {
+                Text = "CANCEL",
+                BackgroundColor = Color.FromArgb("#6C757D"),
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
+                HeightRequest = 45
+            };
+            cancelButton.Clicked += (s, e) =>
+            {
+                CloseCurrentModal();
+                if (_currentModal != null && this.Content is Grid rootGrid)
+                {
+                    rootGrid.Children.Remove(_currentModal);
+                }
+                _currentModal = null;
+                tcs.TrySetResult(null);
+            };
+
+            var yesButton = new Button
+            {
+                Text = "YES",
+                BackgroundColor = Color.FromArgb("#4CAF50"),
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
+                HeightRequest = 45
+            };
+            yesButton.Clicked += (s, e) =>
+            {
+                var remarks = remarksEditor.Text;
+                CloseCurrentModal();
+                if (_currentModal != null && this.Content is Grid rootGrid)
+                {
+                    rootGrid.Children.Remove(_currentModal);
+                }
+                _currentModal = null;
+                tcs.TrySetResult(remarks);
+            };
+
+            Grid.SetColumn(cancelButton, 0);
+            Grid.SetColumn(yesButton, 1);
+            buttonGrid.Children.Add(cancelButton);
+            buttonGrid.Children.Add(yesButton);
+
+            contentStack.Children.Add(iconLabel);
+            contentStack.Children.Add(headingLabel);
+            contentStack.Children.Add(remarksEditor);
+            contentStack.Children.Add(buttonGrid);
+
+            contentFrame.Content = contentStack;
+
+            AbsoluteLayout.SetLayoutBounds(contentFrame, new Rect(0.5, 0.5, AbsoluteLayout.AutoSize, AbsoluteLayout.AutoSize));
+            AbsoluteLayout.SetLayoutFlags(contentFrame, AbsoluteLayoutFlags.PositionProportional);
+
+            modal.Children.Add(contentFrame);
+            _currentModal = modal;
+
+            if (this.Content is Grid rootGrid)
+            {
+                Grid.SetRowSpan(modal, 3);
+                Grid.SetRow(modal, 0);
+                rootGrid.Children.Add(modal);
+            }
+
+            return tcs.Task;
+        }
+
+        private Task<(double latitude, double longitude)?> ShowLocationMapModal()
+        {
+            var tcs = new TaskCompletionSource<(double latitude, double longitude)?>();
+
+            var modal = new AbsoluteLayout
+            {
+                BackgroundColor = Color.FromArgb("#AA000000"),
+                HorizontalOptions = LayoutOptions.Fill,
+                VerticalOptions = LayoutOptions.Fill
+            };
+
+            var contentFrame = new Frame
+            {
+                BackgroundColor = Colors.White,
+                BorderColor = Color.FromArgb("#E0E0E0"),
+                CornerRadius = 15,
+                Padding = new Thickness(20),
+                WidthRequest = 360,
+                HeightRequest = 500,
+                HasShadow = true
+            };
+
+            var contentStack = new StackLayout { Spacing = 15 };
+
+            var headingLabel = new Label
+            {
+                Text = "Confirm Location",
+                FontSize = 20,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Color.FromArgb("#333333"),
+                HorizontalTextAlignment = TextAlignment.Center
+            };
+
+            var mapFrame = new Frame
+            {
+                BackgroundColor = Color.FromArgb("#E3F2FD"),
+                BorderColor = Color.FromArgb("#2196F3"),
+                CornerRadius = 10,
+                HeightRequest = 300,
+                Padding = 0
+            };
+
+            // Get current location
+            double currentLat = 0;
+            double currentLng = 0;
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var location = await Geolocation.GetLocationAsync(new GeolocationRequest
+                    {
+                        DesiredAccuracy = GeolocationAccuracy.Best,
+                        Timeout = TimeSpan.FromSeconds(10)
+                    });
+
+                    if (location != null)
+                    {
+                        currentLat = location.Latitude;
+                        currentLng = location.Longitude;
+
+                        MainThread.BeginInvokeOnMainThread(() =>
+                        {
+                            var mapWebView = new WebView
+                            {
+                                HorizontalOptions = LayoutOptions.Fill,
+                                VerticalOptions = LayoutOptions.Fill
+                            };
+
+                            var htmlSource = new HtmlWebViewSource
+                            {
+                                Html = $@"
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                        <style>
+                            * {{ margin: 0; padding: 0; }}
+                            body, html {{ height: 100%; width: 100%; overflow: hidden; }}
+                            #map {{ height: 100%; width: 100%; }}
+                        </style>
+                    </head>
+                    <body>
+                        <iframe 
+                            id='map'
+                            frameborder='0' 
+                            style='border:0'
+                            src='https://www.google.com/maps?q={currentLat},{currentLng}&z=15&output=embed'
+                            allowfullscreen>
+                        </iframe>
+                    </body>
+                    </html>"
+                            };
+
+                            mapWebView.Source = htmlSource;
+                            mapFrame.Content = mapWebView;
+                        });
+                    }
+                }
+                catch
+                {
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        mapFrame.Content = new Label
+                        {
+                            Text = "Unable to get current location",
+                            HorizontalTextAlignment = TextAlignment.Center,
+                            VerticalTextAlignment = TextAlignment.Center,
+                            TextColor = Color.FromArgb("#666666")
+                        };
+                    });
+                }
+            });
+
+            var buttonGrid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitionCollection
+        {
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+        },
+                ColumnSpacing = 15
+            };
+
+            var cancelButton = new Button
+            {
+                Text = "CANCEL",
+                BackgroundColor = Color.FromArgb("#6C757D"),
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
+                HeightRequest = 45
+            };
+            cancelButton.Clicked += (s, e) =>
+            {
+                CloseCurrentModal();
+                if (_currentModal != null && this.Content is Grid rootGrid)
+                {
+                    rootGrid.Children.Remove(_currentModal);
+                }
+                _currentModal = null;
+                tcs.TrySetResult(null);
+            };
+
+            var saveButton = new Button
+            {
+                Text = "SAVE",
+                BackgroundColor = Color.FromArgb("#4CAF50"),
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
+                HeightRequest = 45
+            };
+            saveButton.Clicked += async (s, e) =>
+            {
+                if (currentLat == 0 && currentLng == 0)
+                {
+                    // Try to get location again
+                    try
+                    {
+                        var location = await Geolocation.GetLocationAsync(new GeolocationRequest
+                        {
+                            DesiredAccuracy = GeolocationAccuracy.Best,
+                            Timeout = TimeSpan.FromSeconds(10)
+                        });
+
+                        if (location != null)
+                        {
+                            currentLat = location.Latitude;
+                            currentLng = location.Longitude;
+                        }
+                    }
+                    catch { }
+                }
+
+                CloseCurrentModal();
+                if (_currentModal != null && this.Content is Grid rootGrid)
+                {
+                    rootGrid.Children.Remove(_currentModal);
+                }
+                _currentModal = null;
+
+                if (currentLat != 0 && currentLng != 0)
+                {
+                    tcs.TrySetResult((currentLat, currentLng));
+                }
+                else
+                {
+                    tcs.TrySetResult(null);
+                }
+            };
+
+            Grid.SetColumn(cancelButton, 0);
+            Grid.SetColumn(saveButton, 1);
+            buttonGrid.Children.Add(cancelButton);
+            buttonGrid.Children.Add(saveButton);
+
+            contentStack.Children.Add(headingLabel);
+            contentStack.Children.Add(mapFrame);
+            contentStack.Children.Add(buttonGrid);
+
+            contentFrame.Content = contentStack;
+            AbsoluteLayout.SetLayoutBounds(contentFrame, new Rect(0.5, 0.5, AbsoluteLayout.AutoSize, AbsoluteLayout.AutoSize));
+            AbsoluteLayout.SetLayoutFlags(contentFrame, AbsoluteLayoutFlags.PositionProportional);
+
+            modal.Children.Add(contentFrame);
+            _currentModal = modal;
+
+            if (this.Content is Grid rootGrid)
+            {
+                Grid.SetRowSpan(modal, 3);
+                Grid.SetRow(modal, 0);
+                rootGrid.Children.Add(modal);
+            }
+
+            return tcs.Task;
+        }
+
+        private void UpdateLocationFields(double latitude, double longitude)
+        {
+            // Find and update Longitude field
+            var longitudeEntry = FindEntryByPlaceholder("Longitude");
+            if (longitudeEntry != null)
+            {
+                longitudeEntry.Text = longitude.ToString("F6");
+            }
+
+            // Find and update Latitude field
+            var latitudeEntry = FindEntryByPlaceholder("Latitude");
+            if (latitudeEntry != null)
+            {
+                latitudeEntry.Text = latitude.ToString("F6");
+            }
+
+            // Generate and update Geo Tagging ID
+            var geoTagEntry = FindEntryByPlaceholder("GeoTaggingID");
+            if (geoTagEntry != null)
+            {
+                string geoTagId = GenerateGeoTagId(latitude, longitude);
+                geoTagEntry.Text = geoTagId;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"Location updated: Lat={latitude}, Lng={longitude}");
+        }
+
+        private Entry FindEntryByPlaceholder(string placeholder)
+        {
+            foreach (var child in ContentContainer.Children)
+            {
+                if (child is StackLayout stack)
+                {
+                    foreach (var item in stack.Children)
+                    {
+                        if (item is Grid grid)
+                        {
+                            var label = grid.Children.OfType<Label>()
+                                .FirstOrDefault(l => l.Text?.Replace("*", "").Replace(" ", "").Replace(":", "")
+                                    == placeholder.Replace("*", "").Replace(" ", "").Replace(":", ""));
+
+                            if (label != null)
+                            {
+                                var entry = grid.Children.OfType<Entry>().FirstOrDefault();
+                                if (entry != null)
+                                {
+                                    return entry;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
         }
 
         private Button CreateNavigationButton(string text, Color backgroundColor, Func<Task> action)
@@ -3006,19 +3504,76 @@ namespace PMEGP_Physical_V
         {
             try
             {
-                var payload = new
+                // Step 1: Update isUnitVerDone = true via Insert_UVData_PV
+                var unitVerPayload = new
                 {
                     ApplID = _applId,
                     isUnitVerDone = true
                 };
 
-                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+                var unitVerJson = JsonSerializer.Serialize(unitVerPayload);
+                var unitVerContent = new StringContent(unitVerJson, System.Text.Encoding.UTF8, "application/json");
 
-                await DisplayAlert("Success", "Unit verification completed successfully!", "OK");
-                await Navigation.PopAsync();
+                System.Diagnostics.Debug.WriteLine($"Updating Unit Verification Status: {unitVerJson}");
+
+                var unitVerResponse = await _httpClient.PostAsync(
+                    "https://115.124.125.153/MobileApp/Insert_UVData_PV",
+                    unitVerContent
+                );
+
+                var unitVerResponseContent = await unitVerResponse.Content.ReadAsStringAsync();
+                System.Diagnostics.Debug.WriteLine($"Unit Ver Response: {unitVerResponseContent}");
+
+                if (!unitVerResponse.IsSuccessStatusCode)
+                {
+                    throw new Exception($"Failed to update unit verification status: {unitVerResponseContent}");
+                }
+
+                // Step 2: Get enumerator remarks from verification section
+                string enumRemarks = FindEditorValue("EnumeratorRemark") ?? "Unit verification completed successfully";
+
+                // Step 3: Get verification status
+                string verificationStatus = GetVerificationStatusText(); // "Working", "Defunct", or "Non-Traceable"
+
+                // Step 4: Call PhyVerFinalSub_TP for final submission
+                var finalSubPayload = new
+                {
+                    ApplID = _applId,
+                    status = verificationStatus,
+                    enumRem = enumRemarks
+                };
+
+                var finalSubJson = JsonSerializer.Serialize(finalSubPayload);
+                var finalSubContent = new StringContent(finalSubJson, System.Text.Encoding.UTF8, "application/json");
+
+                System.Diagnostics.Debug.WriteLine($"Calling Final Submission: {finalSubJson}");
+
+                var finalSubResponse = await _httpClient.PostAsync(
+                    "https://115.124.125.153/MobileApp/PhyVerFinalSub_TP",
+                    finalSubContent
+                );
+
+                var finalSubResponseContent = await finalSubResponse.Content.ReadAsStringAsync();
+                System.Diagnostics.Debug.WriteLine($"Final Submission Response: {finalSubResponseContent}");
+
+                if (finalSubResponse.IsSuccessStatusCode)
+                {
+                    await DisplayAlert("Success", "Unit verification completed and submitted successfully!", "OK");
+                    await Navigation.PopAsync();
+                }
+                else
+                {
+                    throw new Exception($"Final submission failed: {finalSubResponseContent}");
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Network Error: {ex.Message}");
+                await DisplayAlert("Network Error", $"Unable to connect to server: {ex.Message}", "OK");
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Final Submit Error: {ex.Message}");
                 await DisplayAlert("Error", $"Final submission failed: {ex.Message}", "OK");
             }
         }
@@ -3187,6 +3742,18 @@ namespace PMEGP_Physical_V
                 }
             }
             return "";
+        }
+
+        private string GetVerificationStatusText()
+        {
+            string statusCode = GetVerificationStatusCode();
+            return statusCode switch
+            {
+                "WR" => "Working",
+                "DF" => "Defunct",
+                "NT" => "Non-Traceable",
+                _ => "Working"
+            };
         }
 
         private string FindPickerValue(string placeholder)
