@@ -134,6 +134,9 @@ namespace PMEGP_Physical_V
         private bool _isLoading;
         private string _errorMessage = string.Empty;
         private string _searchText = string.Empty;
+        private bool _shouldRefreshOnAppearing = false;
+
+
 
 
         public ObservableCollection<ApplicantViewModel> Applicants
@@ -200,6 +203,10 @@ namespace PMEGP_Physical_V
                 Timeout = TimeSpan.FromSeconds(30)
             };
         }
+
+
+
+
 
         public async Task LoadDataAsync(string userName, string status)
         {
@@ -448,6 +455,9 @@ namespace PMEGP_Physical_V
         private double scaleFactor;
         private bool isSmallScreen;
         private bool isTablet;
+        private bool _shouldRefreshOnAppearing = false;
+        private string _userName = "Test";
+        private string _status = "PendingApplications";
 
         public DetailsPage(DashboardPage.DetailsPageRequest request)
         {
@@ -455,6 +465,10 @@ namespace PMEGP_Physical_V
 
             _viewModel = new DetailsPageViewModel();
             BindingContext = _viewModel;
+
+            // Store request parameters for refresh
+            _userName = request.UserName;
+            _status = request.Status;
 
             InitializeResponsiveDesign();
             _ = LoadDataAsync(request.UserName, request.Status);
@@ -488,6 +502,30 @@ namespace PMEGP_Physical_V
                 // ✨ NEW: Always hide loader after data is loaded (success or failure)
                 HideLoader();
             }
+        }
+
+        protected override async void OnAppearing()
+        {
+            base.OnAppearing();
+
+            if (_shouldRefreshOnAppearing)
+            {
+                _shouldRefreshOnAppearing = false;
+                await RefreshDataAsync();
+            }
+        }
+
+        private async Task RefreshDataAsync()
+        {
+            ShowLoader();
+            await _viewModel.LoadDataAsync(_userName, _status);
+
+            if (!_viewModel.IsLoading && string.IsNullOrEmpty(_viewModel.ErrorMessage))
+            {
+                DisplayApplicants(_viewModel.FilteredApplicants.ToList());
+            }
+
+            HideLoader();
         }
 
         protected override void OnSizeAllocated(double width, double height)

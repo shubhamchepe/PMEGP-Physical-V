@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using UraniumUI;
 
 namespace PMEGP_Physical_V
 {
@@ -9,6 +10,8 @@ namespace PMEGP_Physical_V
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
+                .UseUraniumUI()           // Use this instead of ConfigureUraniumUI
+                .UseUraniumUIMaterial()
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -16,7 +19,7 @@ namespace PMEGP_Physical_V
                 });
 
 #if DEBUG
-    		builder.Logging.AddDebug();
+            builder.Logging.AddDebug();
 #endif
 
             return builder.Build();

@@ -2,6 +2,7 @@
 <ContentPage x:Class="PMEGP_Physical_V.UnitVerificationPage"
              xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:uranium="http://schemas.enisn-projects.io/dotnet/maui/uraniumui"
              Title="Unit Verification"
              BackgroundColor="#FAFAFA"
              NavigationPage.HasNavigationBar="False">

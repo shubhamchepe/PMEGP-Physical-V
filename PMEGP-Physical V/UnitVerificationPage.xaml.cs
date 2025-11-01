@@ -1,8 +1,9 @@
-﻿using Microsoft.Maui.Layouts;
+﻿using Microsoft.Maui.Controls.Shapes;
+using Microsoft.Maui.Layouts;
 using PMEGP_Physical_V.Converters;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-
+using IOPath = System.IO.Path;
 
 
 namespace PMEGP_Physical_V
@@ -283,6 +284,7 @@ namespace PMEGP_Physical_V
         private readonly bool _isUnitVerDone;
         private Dictionary<int, Dictionary<string, object>> _stepData = new Dictionary<int, Dictionary<string, object>>();
         private string _previousVerificationStatus = "WR"; // Track previous status
+        private Dictionary<string, object> _formState = new Dictionary<string, object>();
 
         private readonly Dictionary<int, StepInfo> _stepInfos = new Dictionary<int, StepInfo>
         {
@@ -607,10 +609,26 @@ namespace PMEGP_Physical_V
         {
             if (stepNumber != _currentStep && stepNumber >= 1 && stepNumber <= TotalSteps)
             {
+                //System.Diagnostics.Debug.WriteLine($"\n🔄 Navigating from Step {_currentStep} to Step {stepNumber}");
+
+                // CRITICAL: Save current step state BEFORE changing _currentStep
+                SaveCurrentStepState();
+
                 _currentStep = stepNumber;
                 UpdateStepVisualStates();
+
+                // Load the new step content
                 LoadStepContent(_currentStep);
+
+                // CRITICAL: Wait for UI to fully render before restoring
+                await Task.Delay(200); // Increased delay to ensure UI is ready
+
+                // Restore saved state for the new step
+                RestoreStepState();
+
                 await ScrollToStep(stepNumber);
+
+                //System.Diagnostics.Debug.WriteLine($"✅ Navigation complete to Step {stepNumber}\n");
             }
         }
 
@@ -623,8 +641,546 @@ namespace PMEGP_Physical_V
             await StepScrollView.ScrollToAsync(Math.Max(0.0, (double)scrollX), 0, true);
         }
 
+        /// <summary>
+        /// Save all input values from current step before navigating away
+        /// </summary>
+        private void SaveCurrentStepState()
+        {
+            try
+            {
+                //System.Diagnostics.Debug.WriteLine($"🔵 Saving state for step {_currentStep}...");
+                int savedCount = 0;
+
+                foreach (var child in ContentContainer.Children)
+                {
+                    if (child is StackLayout stack)
+                    {
+                        savedCount += SaveStackLayoutState(stack);
+                    }
+                }
+
+                //System.Diagnostics.Debug.WriteLine($"✅ State saved for step {_currentStep}: {savedCount} items, Total in state: {_formState.Count}");
+
+                // Debug: Print all saved keys
+                foreach (var key in _formState.Keys)
+                {
+                    System.Diagnostics.Debug.WriteLine($"   📝 {key} = {_formState[key]}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Error saving state: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        /// <summary>
+        /// Recursively save state from StackLayout hierarchy
+        /// </summary>
+        private int SaveStackLayoutState(StackLayout stack)
+        {
+            int count = 0;
+
+            foreach (var item in stack.Children)
+            {
+                try
+                {
+                    if (item is Grid editorGrid)
+                    {
+                        // Check for Border containing Editor directly
+                        var editorBorder = editorGrid.Children.OfType<Border>().FirstOrDefault();
+                        if (editorBorder?.Content is VerticalStackLayout editorVertStack)
+                        {
+                            var editorLabel = editorVertStack.Children.OfType<Label>().FirstOrDefault();
+                            var editor = editorVertStack.Children.OfType<Editor>().FirstOrDefault();
+
+                            if (editorLabel != null && editor != null)
+                            {
+                                string key = NormalizeKey(editorLabel.Text);
+                                string value = editor.Text ?? "";
+                                _formState[key] = value;
+                                count++;
+                                System.Diagnostics.Debug.WriteLine($"   ✔️ Saved Multiline Editor: {key} = {value.Substring(0, Math.Min(50, value.Length))}...");
+                                continue; // Skip further processing for this item
+                            }
+                        }
+                    }
+                    // Handle Grid containing Entry/Editor/Picker
+                    if (item is Grid grid)
+                    {
+                        // Check for Border wrapper (Material Design 3 style)
+                        var border = grid.Children.OfType<Border>().FirstOrDefault();
+                        if (border?.Content is Grid contentGrid)
+                        {
+                            var result = ExtractAndSaveFromGrid(contentGrid);
+                            if (result.saved)
+                            {
+                                count++;
+                                //System.Diagnostics.Debug.WriteLine($"   ✔️ Saved from Grid: {result.key} = {result.value}");
+                            }
+                        }
+                        // Check for direct Entry/Editor/Picker in Grid (old style)
+                        else
+                        {
+                            var result = ExtractAndSaveFromGrid(grid);
+                            if (result.saved)
+                            {
+                                count++;
+                                //System.Diagnostics.Debug.WriteLine($"   ✔️ Saved from Direct Grid: {result.key} = {result.value}");
+                            }
+                        }
+                    }
+
+                    if (item is Picker standalonePicker && standalonePicker.SelectedItem != null)
+                    {
+                        // Get picker title or use a default key
+                        string key = !string.IsNullOrEmpty(standalonePicker.Title)
+                            ? NormalizeKey(standalonePicker.Title)
+                            : "ProductDetailsMainProduct";
+
+                        string value = standalonePicker.SelectedItem.ToString();
+                        _formState[key] = value;
+                        count++;
+                        System.Diagnostics.Debug.WriteLine($"   ✔️ Saved Standalone Picker: {key} = {value}");
+                    }
+
+                    // Handle Switch sections
+                    if (item is StackLayout possibleSwitchWrapper)
+                    {
+                        var switchBorder = possibleSwitchWrapper.Children.OfType<Border>().FirstOrDefault();
+                        if (switchBorder?.Content is Grid switchGrid)
+                        {
+                            var label = switchGrid.Children.OfType<Label>().FirstOrDefault();
+                            var switchControl = switchGrid.Children.OfType<Switch>().FirstOrDefault();
+
+                            if (label != null && switchControl != null)
+                            {
+                                string key = NormalizeKey(label.Text);
+                                _formState[key] = switchControl.IsToggled;
+                                count++;
+                                //System.Diagnostics.Debug.WriteLine($"   ✔️ Saved Switch: {key} = {switchControl.IsToggled}");
+                            }
+                        }
+                    }
+
+                    // Handle Radio button groups (Verification Status)
+                    if (item is StackLayout radioGroup && radioGroup.Orientation == StackOrientation.Horizontal)
+                    {
+                        foreach (var radioContainer in radioGroup.Children.OfType<StackLayout>())
+                        {
+                            var radioFrame = radioContainer.Children.FirstOrDefault() as Frame;
+                            if (radioFrame != null && radioFrame.BackgroundColor == Color.FromArgb("#4CAF50"))
+                            {
+                                _formState["VerificationStatus_Selected"] = radioFrame.ClassId;
+                                count++;
+                                //System.Diagnostics.Debug.WriteLine($"   ✔️ Saved Radio: VerificationStatus_Selected = {radioFrame.ClassId}");
+                                break;
+                            }
+                        }
+                    }
+
+                    // Recursively process nested StackLayouts
+                    if (item is StackLayout nestedStack && item != stack)
+                    {
+                        count += SaveStackLayoutState(nestedStack);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"   ⚠️ Error processing item: {ex.Message}");
+                }
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Extract and save input values from a Grid
+        /// </summary>
+        private (bool saved, string key, object value) ExtractAndSaveFromGrid(Grid grid)
+        {
+            try
+            {
+                // Look for VerticalStackLayout (Material Design 3 style)
+                var verticalStack = grid.Children.OfType<VerticalStackLayout>().FirstOrDefault();
+                if (verticalStack != null)
+                {
+                    var label = verticalStack.Children.OfType<Label>().FirstOrDefault();
+                    var entry = verticalStack.Children.OfType<Entry>().FirstOrDefault();
+                    var editor = verticalStack.Children.OfType<Editor>().FirstOrDefault();
+                    var picker = verticalStack.Children.OfType<Picker>().FirstOrDefault();
+
+                    if (label != null)
+                    {
+                        string key = NormalizeKey(label.Text);
+
+                        if (entry != null)
+                        {
+                            string value = entry.Text ?? "";
+                            _formState[key] = value;
+                            return (true, key, value);
+                        }
+                        else if (editor != null)
+                        {
+                            string value = editor.Text ?? "";
+                            _formState[key] = value;
+                            return (true, key, value);
+                        }
+                        else if (picker != null && picker.SelectedItem != null)
+                        {
+                            string value = picker.SelectedItem.ToString();
+                            _formState[key] = value;
+
+                            // Special handling for Verification Status dropdown
+                            if (key.Contains("VerificationStatus"))
+                            {
+                                _formState["VerificationStatus_Dropdown"] = value;
+                                System.Diagnostics.Debug.WriteLine($"   🔵 Saved Verification Dropdown: {value}");
+                            }
+
+                            return (true, key, value);
+                        }
+                    }
+                }
+
+                // Fallback: Look for direct Entry/Editor/Picker (old style)
+                var directLabel = grid.Children.OfType<Label>().FirstOrDefault();
+                var directEntry = grid.Children.OfType<Entry>().FirstOrDefault();
+                var directEditor = grid.Children.OfType<Editor>().FirstOrDefault();
+                var directPicker = grid.Children.OfType<Picker>().FirstOrDefault();
+
+                if (directLabel != null)
+                {
+                    string key = NormalizeKey(directLabel.Text);
+
+                    if (directEntry != null)
+                    {
+                        string value = directEntry.Text ?? "";
+                        _formState[key] = value;
+                        return (true, key, value);
+                    }
+                    else if (directEditor != null)
+                    {
+                        string value = directEditor.Text ?? "";
+                        _formState[key] = value;
+                        return (true, key, value);
+                    }
+                    else if (directPicker != null && directPicker.SelectedItem != null)
+                    {
+                        string value = directPicker.SelectedItem.ToString();
+                        _formState[key] = value;
+                        return (true, key, value);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"   ⚠️ ExtractAndSaveFromGrid error: {ex.Message}");
+            }
+
+            return (false, "", null);
+        }
+
+        /// <summary>
+        /// Restore saved values when loading a step
+        /// </summary>
+        private void RestoreStepState()
+        {
+            try
+            {
+                if (_formState.Count == 0)
+                {
+                    //System.Diagnostics.Debug.WriteLine($"⚠️ No state to restore for step {_currentStep}");
+                    return;
+                }
+
+                //System.Diagnostics.Debug.WriteLine($"🔵 Restoring state for step {_currentStep}...");
+                int restoredCount = 0;
+
+                // Use BeginInvokeOnMainThread to ensure UI is ready
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    foreach (var child in ContentContainer.Children)
+                    {
+                        if (child is StackLayout stack)
+                        {
+                            restoredCount += RestoreStackLayoutState(stack);
+                        }
+                    }
+
+                    //System.Diagnostics.Debug.WriteLine($"✅ State restored for step {_currentStep}: {restoredCount} items");
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Error restoring state: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        /// <summary>
+        /// Recursively restore state to StackLayout hierarchy
+        /// </summary>
+        private int RestoreStackLayoutState(StackLayout stack)
+        {
+            int count = 0;
+
+            foreach (var item in stack.Children)
+            {
+                try
+                {
+                    if (item is Grid editorGrid)
+                    {
+                        var editorBorder = editorGrid.Children.OfType<Border>().FirstOrDefault();
+                        if (editorBorder?.Content is VerticalStackLayout editorVertStack)
+                        {
+                            var editorLabel = editorVertStack.Children.OfType<Label>().FirstOrDefault();
+                            var editor = editorVertStack.Children.OfType<Editor>().FirstOrDefault();
+
+                            if (editorLabel != null && editor != null && editor.IsEnabled)
+                            {
+                                string key = NormalizeKey(editorLabel.Text);
+                                if (_formState.ContainsKey(key))
+                                {
+                                    editor.Text = _formState[key]?.ToString() ?? "";
+                                    count++;
+                                    System.Diagnostics.Debug.WriteLine($"   ✔️ Restored Multiline Editor: {key} = {editor.Text.Substring(0, Math.Min(50, editor.Text.Length))}...");
+                                    continue; // Skip further processing
+                                }
+                            }
+                        }
+                    }
+                    // Handle Grid containing Entry/Editor/Picker
+                    if (item is Grid grid)
+                    {
+                        // Check for Border wrapper (Material Design 3 style)
+                        var border = grid.Children.OfType<Border>().FirstOrDefault();
+                        if (border?.Content is Grid contentGrid)
+                        {
+                            if (RestoreToGrid(contentGrid))
+                            {
+                                count++;
+                            }
+                        }
+                        // Check for direct Entry/Editor/Picker in Grid (old style)
+                        else
+                        {
+                            if (RestoreToGrid(grid))
+                            {
+                                count++;
+                            }
+                        }
+                    }
+
+                    if (item is Picker standalonePicker && standalonePicker.IsEnabled)
+                    {
+                        string key = !string.IsNullOrEmpty(standalonePicker.Title)
+                            ? NormalizeKey(standalonePicker.Title)
+                            : "ProductDetailsMainProduct";
+
+                        if (_formState.ContainsKey(key))
+                        {
+                            string savedValue = _formState[key]?.ToString();
+                            if (!string.IsNullOrEmpty(savedValue) && standalonePicker.Items.Contains(savedValue))
+                            {
+                                standalonePicker.SelectedItem = savedValue;
+                                count++;
+                                System.Diagnostics.Debug.WriteLine($"   ✔️ Restored Standalone Picker: {key} = {savedValue}");
+                            }
+                        }
+                    }
+
+                    // Handle Switch sections
+                    if (item is StackLayout possibleSwitchWrapper)
+                    {
+                        var switchBorder = possibleSwitchWrapper.Children.OfType<Border>().FirstOrDefault();
+                        if (switchBorder?.Content is Grid switchGrid)
+                        {
+                            var label = switchGrid.Children.OfType<Label>().FirstOrDefault();
+                            var switchControl = switchGrid.Children.OfType<Switch>().FirstOrDefault();
+
+                            if (label != null && switchControl != null && switchControl.IsEnabled)
+                            {
+                                string key = NormalizeKey(label.Text);
+                                if (_formState.ContainsKey(key) && _formState[key] is bool boolValue)
+                                {
+                                    switchControl.IsToggled = boolValue;
+                                    count++;
+                                    //System.Diagnostics.Debug.WriteLine($"   ✔️ Restored Switch: {key} = {boolValue}");
+                                }
+                            }
+                        }
+                    }
+
+                    // Handle Radio button groups (Verification Status)
+                    if (item is StackLayout radioGroup && radioGroup.Orientation == StackOrientation.Horizontal)
+                    {
+                        if (_formState.ContainsKey("VerificationStatus_Selected"))
+                        {
+                            string savedSelection = _formState["VerificationStatus_Selected"]?.ToString();
+                            //System.Diagnostics.Debug.WriteLine($"   🔵 Restoring radio selection: {savedSelection}");
+
+                            foreach (var radioContainer in radioGroup.Children.OfType<StackLayout>())
+                            {
+                                var radioFrame = radioContainer.Children.FirstOrDefault() as Frame;
+                                if (radioFrame != null)
+                                {
+                                    bool shouldSelect = radioFrame.ClassId == savedSelection;
+                                    radioFrame.BackgroundColor = shouldSelect ? Color.FromArgb("#4CAF50") : Colors.Transparent;
+
+                                    if (shouldSelect)
+                                    {
+                                        var innerDot = new BoxView
+                                        {
+                                            BackgroundColor = Colors.White,
+                                            WidthRequest = 8,
+                                            HeightRequest = 8,
+                                            CornerRadius = 4,
+                                            HorizontalOptions = LayoutOptions.Center,
+                                            VerticalOptions = LayoutOptions.Center
+                                        };
+                                        radioFrame.Content = innerDot;
+                                        count++;
+                                        //System.Diagnostics.Debug.WriteLine($"   ✔️ Restored Radio: {savedSelection}");
+                                    }
+                                    else
+                                    {
+                                        radioFrame.Content = null;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Recursively process nested StackLayouts
+                    if (item is StackLayout nestedStack && item != stack)
+                    {
+                        count += RestoreStackLayoutState(nestedStack);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"   ⚠️ Error processing item during restore: {ex.Message}");
+                }
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Restore values to a Grid containing input controls
+        /// </summary>
+        private bool RestoreToGrid(Grid grid)
+        {
+            try
+            {
+                // Look for VerticalStackLayout (Material Design 3 style)
+                var verticalStack = grid.Children.OfType<VerticalStackLayout>().FirstOrDefault();
+                if (verticalStack != null)
+                {
+                    var label = verticalStack.Children.OfType<Label>().FirstOrDefault();
+                    var entry = verticalStack.Children.OfType<Entry>().FirstOrDefault();
+                    var editor = verticalStack.Children.OfType<Editor>().FirstOrDefault();
+                    var picker = verticalStack.Children.OfType<Picker>().FirstOrDefault();
+
+                    if (label != null)
+                    {
+                        string key = NormalizeKey(label.Text);
+
+                        if (_formState.ContainsKey(key))
+                        {
+                            var savedValue = _formState[key];
+
+                            if (entry != null && entry.IsEnabled)
+                            {
+                                entry.Text = savedValue?.ToString() ?? "";
+                                //System.Diagnostics.Debug.WriteLine($"   ✔️ Restored Entry: {key} = {entry.Text}");
+                                return true;
+                            }
+                            else if (editor != null && editor.IsEnabled)
+                            {
+                                editor.Text = savedValue?.ToString() ?? "";
+                                //System.Diagnostics.Debug.WriteLine($"   ✔️ Restored Editor: {key} = {editor.Text}");
+                                return true;
+                            }
+                            else if (picker != null && picker.IsEnabled)
+                            {
+                                string savedPickerValue = savedValue?.ToString();
+
+                                // Special handling for Verification Status dropdown
+                                if (key.Contains("VerificationStatus") && _formState.ContainsKey("VerificationStatus_Dropdown"))
+                                {
+                                    savedPickerValue = _formState["VerificationStatus_Dropdown"]?.ToString();
+                                }
+
+                                if (!string.IsNullOrEmpty(savedPickerValue) && picker.Items.Contains(savedPickerValue))
+                                {
+                                    picker.SelectedItem = savedPickerValue;
+                                    System.Diagnostics.Debug.WriteLine($"   ✔️ Restored Picker: {key} = {savedPickerValue}");
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fallback: Look for direct Entry/Editor/Picker (old style)
+                var directLabel = grid.Children.OfType<Label>().FirstOrDefault();
+                var directEntry = grid.Children.OfType<Entry>().FirstOrDefault();
+                var directEditor = grid.Children.OfType<Editor>().FirstOrDefault();
+                var directPicker = grid.Children.OfType<Picker>().FirstOrDefault();
+
+                if (directLabel != null)
+                {
+                    string key = NormalizeKey(directLabel.Text);
+
+                    if (_formState.ContainsKey(key))
+                    {
+                        var savedValue = _formState[key];
+
+                        if (directEntry != null && directEntry.IsEnabled)
+                        {
+                            directEntry.Text = savedValue?.ToString() ?? "";
+                            //System.Diagnostics.Debug.WriteLine($"   ✔️ Restored Direct Entry: {key} = {directEntry.Text}");
+                            return true;
+                        }
+                        else if (directEditor != null && directEditor.IsEnabled)
+                        {
+                            directEditor.Text = savedValue?.ToString() ?? "";
+                            //System.Diagnostics.Debug.WriteLine($"   ✔️ Restored Direct Editor: {key} = {directEditor.Text}");
+                            return true;
+                        }
+                        else if (directPicker != null && directPicker.IsEnabled)
+                        {
+                            string savedPickerValue = savedValue?.ToString();
+                            if (!string.IsNullOrEmpty(savedPickerValue) && directPicker.Items.Contains(savedPickerValue))
+                            {
+                                directPicker.SelectedItem = savedPickerValue;
+                                //System.Diagnostics.Debug.WriteLine($"   ✔️ Restored Direct Picker: {key} = {savedPickerValue}");
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"   ⚠️ RestoreToGrid error: {ex.Message}");
+            }
+
+            return false;
+        }
+
+        private string NormalizeKey(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            return text.Replace("*", "").Replace(" ", "").Replace(":", "").Replace("-", "").Trim();
+        }
+
         private void LoadStepContent(int step)
         {
+            //System.Diagnostics.Debug.WriteLine($"📄 Loading content for step {step}");
+
             ContentContainer.Children.Clear();
 
             switch (step)
@@ -660,6 +1216,8 @@ namespace PMEGP_Physical_V
                     LoadSummaryContent();
                     break;
             }
+
+            //System.Diagnostics.Debug.WriteLine($"✅ Content loaded for step {step}");
         }
 
         private void LoadBeneficiaryContent()
@@ -710,6 +1268,22 @@ namespace PMEGP_Physical_V
         {
             try
             {
+                // Request location permissions
+                var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+                if (status != PermissionStatus.Granted)
+                {
+                    status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+                }
+
+                if (status != PermissionStatus.Granted)
+                {
+                    await DisplayAlert("Permission Denied", "Location permission is required to get current location", "OK");
+                    return;
+                }
+
+                // Show loading indicator
+                await DisplayAlert("Loading", "Fetching location...", "OK");
+
                 var location = await Geolocation.GetLocationAsync(new GeolocationRequest
                 {
                     DesiredAccuracy = GeolocationAccuracy.Best,
@@ -719,24 +1293,35 @@ namespace PMEGP_Physical_V
                 if (location != null)
                 {
                     // Update Latitude field
-                    var latEntry = FindEntryByClassId("LatitudeEntry");
+                    var latEntry = FindEntryByPlaceholder("Latitude");
                     if (latEntry != null)
                         latEntry.Text = location.Latitude.ToString("F6");
 
                     // Update Longitude field
-                    var longEntry = FindEntryByClassId("LongitudeEntry");
+                    var longEntry = FindEntryByPlaceholder("Longitude");
                     if (longEntry != null)
                         longEntry.Text = location.Longitude.ToString("F6");
 
                     // Generate and update GeoTag ID
-                    var geoTagEntry = FindEntryByClassId("GeoTagEntry");
+                    var geoTagEntry = FindEntryByPlaceholder("GeoTaggingID");
                     if (geoTagEntry != null)
                     {
                         string geoTagId = GenerateGeoTagId(location.Latitude, location.Longitude);
                         geoTagEntry.Text = geoTagId;
                     }
 
-                    await DisplayAlert("Success", "Location captured successfully", "OK");
+                    // Update the API data object
+                    if (_apiData?.phyVerificationModel != null)
+                    {
+                        _apiData.phyVerificationModel.Latitude = location.Latitude.ToString("F6");
+                        _apiData.phyVerificationModel.Longitude = location.Longitude.ToString("F6");
+                        _apiData.phyVerificationModel.GeoTagID = GenerateGeoTagId(location.Latitude, location.Longitude);
+                    }
+
+                    // Reload the section to update map
+                    LoadStepContent(2);
+
+                    await DisplayAlert("Success", "Location captured and map updated successfully", "OK");
                 }
             }
             catch (FeatureNotSupportedException)
@@ -1308,6 +1893,16 @@ namespace PMEGP_Physical_V
 
                 form.Children.Add(productPicker);
 
+                productPicker.SelectedIndexChanged += (s, e) =>
+                {
+                    if (productPicker.SelectedItem != null)
+                    {
+                        string key = NormalizeKey(productPicker.Title);
+                        _formState[key] = productPicker.SelectedItem.ToString();
+                        System.Diagnostics.Debug.WriteLine($"   💾 Product dropdown changed: {productPicker.SelectedItem}");
+                    }
+                };
+
                 var exportValueFrame = CreateFormEntry("Export Detail - value*", _apiData.phyVerificationModel?.ExportDetails?.ToString("F2") ?? "");
                 form.Children.Add(exportValueFrame);
 
@@ -1688,7 +2283,7 @@ namespace PMEGP_Physical_V
                     }
 
                     var base64File = Convert.ToBase64String(fileBytes);
-                    var fileExtension = Path.GetExtension(filePath);
+                    var fileExtension = IOPath.GetExtension(filePath);
 
                     // Get state info from API data
                     var stateName = _apiData?.applicantData?.StateName ?? "Maharashtra";
@@ -1723,7 +2318,7 @@ namespace PMEGP_Physical_V
                     var jsonPayload = JsonSerializer.Serialize(documentPayload);
                     var content = new StringContent(jsonPayload, System.Text.Encoding.UTF8, "application/json");
 
-                    System.Diagnostics.Debug.WriteLine($"Uploading document: {docNameEntry.Text}");
+                    //System.Diagnostics.Debug.WriteLine($"Uploading document: {docNameEntry.Text}");
 
                     // Call upload API
                     var response = await _httpClient.PostAsync(
@@ -1732,7 +2327,7 @@ namespace PMEGP_Physical_V
                     );
 
                     var responseContent = await response.Content.ReadAsStringAsync();
-                    System.Diagnostics.Debug.WriteLine($"Upload Response: {responseContent}");
+                    //System.Diagnostics.Debug.WriteLine($"Upload Response: {responseContent}");
 
                     if (response.IsSuccessStatusCode)
                     {
@@ -1937,7 +2532,7 @@ namespace PMEGP_Physical_V
                 bool isCompletedStatus = string.Equals(_badgeStatus, "Completed", StringComparison.OrdinalIgnoreCase);
                 bool showDeleteButton = !_isUnitVerDone && isUploadedDoc;
 
-                System.Diagnostics.Debug.WriteLine($"Delete button visibility - Badge Status: {_badgeStatus}, IsCompleted: {isCompletedStatus}, IsUploadedDoc: {isUploadedDoc}, ShowDelete: {showDeleteButton}");
+                //System.Diagnostics.Debug.WriteLine($"Delete button visibility - Badge Status: {_badgeStatus}, IsCompleted: {isCompletedStatus}, IsUploadedDoc: {isUploadedDoc}, ShowDelete: {showDeleteButton}");
 
                 if (showDeleteButton)
                 {
@@ -2493,7 +3088,7 @@ namespace PMEGP_Physical_V
         {
             var grid = new Grid
             {
-                Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0)
+                Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0, 12, 0, 0)
             };
 
             bool isReadOnly = forceReadOnly || !(_isEditable || forceEditable);
@@ -2501,32 +3096,13 @@ namespace PMEGP_Physical_V
             // Always non-editable fields
             string[] readOnlyFields = new[]
             {
-        "Udyam Registration Number",
-        "Address*",
-        "Taluka/Block*",
-        "District*",
-        "State*",
-        "Pincode*",
-        "Industry Type*",
-        "Industry Activity*",
-        "Product Description*",
-        "Longitude*",
-        "Latitude*",
-        "Geo Tagging ID*",
-        "EDP Completed*",
-        "Name of Institute*",
-        "Address of Institute*",
-        "Project Sanctioned Date*",
-        "Capital Expenditure*",
-        "Working Capital*",
-        "Own Contribution*",
-        "Total*",
-        "Financing Bank*",
-        "Bank Branch*",
-        "Bank Address*",
-        "IFSC code*",
-        "Verification Date*",
-        "Verification Agency Name*"
+        "Udyam Registration Number", "Address*", "Taluka/Block*", "District*", "State*",
+        "Pincode*", "Industry Type*", "Industry Activity*", "Product Description*",
+        "Longitude*", "Latitude*", "Geo Tagging ID*", "EDP Completed*",
+        "Name of Institute*", "Address of Institute*", "Project Sanctioned Date*",
+        "Capital Expenditure*", "Working Capital*", "Own Contribution*", "Total*",
+        "Financing Bank*", "Bank Branch*", "Bank Address*", "IFSC code*",
+        "Verification Date*", "Verification Agency Name*"
     };
 
             if (readOnlyFields.Any(f => placeholder.Equals(f, StringComparison.OrdinalIgnoreCase)))
@@ -2534,54 +3110,159 @@ namespace PMEGP_Physical_V
                 isReadOnly = true;
             }
 
-            var entry = new Entry
+            // Material Design 3 colors
+            var primaryColor = Color.FromArgb("#1976D2");
+            var surfaceColor = !isReadOnly ? Colors.White : Color.FromArgb("#F5F5F5");
+            var onSurfaceColor = !isReadOnly ? Color.FromArgb("#1C1B1F") : Color.FromArgb("#79747E");
+            var outlineColor = !isReadOnly ? Color.FromArgb("#1976D2") : Color.FromArgb("#BDBDBD");
+
+            // Main container with proper border
+            var container = new Border
             {
-                Text = text,
-                FontSize = 16,
-                TextColor = Colors.Black,
-                BackgroundColor = isReadOnly ? Color.FromArgb("#F8F8F8") : Colors.White,
-                IsReadOnly = isReadOnly,
-                IsEnabled = !isReadOnly,
-                HeightRequest = 56,
+                BackgroundColor = surfaceColor,
+                Stroke = outlineColor,
+                StrokeThickness = 1.5,
+                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                Padding = new Thickness(16, 4, 12, 4),
+                MinimumHeightRequest = 64,
+                Shadow = !isReadOnly ? new Shadow
+                {
+                    Brush = new SolidColorBrush(Color.FromArgb("#40000000")),
+                    Opacity = 0.15f,
+                    Radius = 4,
+                    Offset = new Point(0, 2)
+                } : null
+            };
+
+            var mainGrid = new Grid
+            {
+                ColumnDefinitions =
+        {
+            new ColumnDefinition { Width = GridLength.Star },
+            new ColumnDefinition { Width = GridLength.Auto }
+        },
+                RowSpacing = 0
+            };
+
+            // Text container
+            var textStack = new VerticalStackLayout
+            {
+                Spacing = 2,
                 VerticalOptions = LayoutOptions.Center
             };
 
+            // Label (always visible, smaller)
             var label = new Label
             {
                 Text = placeholder,
                 FontSize = 12,
-                TextColor = Color.FromArgb("#666666"),
-                BackgroundColor = Colors.White,
-                Padding = new Thickness(4, 0),
-                Margin = new Thickness(16, -6, 0, 0),
-                HorizontalOptions = LayoutOptions.Start,
-                VerticalOptions = LayoutOptions.Start
+                TextColor = !isReadOnly ? primaryColor : Color.FromArgb("#9E9E9E"),
+                FontAttributes = FontAttributes.Bold,
+                Margin = new Thickness(0, 0, 0, 0)
             };
 
-            grid.Children.Add(entry);
-            grid.Children.Add(label);
+            // Entry field with proper alignment
+            var entry = new Entry
+            {
+                Text = text,
+                FontSize = 16,
+                TextColor = onSurfaceColor,
+                BackgroundColor = Colors.Transparent,
+                IsReadOnly = isReadOnly,
+                IsEnabled = !isReadOnly,
+                VerticalOptions = LayoutOptions.Center,
+                Margin = new Thickness(0, -4, 0, 0),
+                VerticalTextAlignment = TextAlignment.Center
+            };
 
+            // Focus effects
+            entry.Focused += (s, e) =>
+            {
+                container.Stroke = primaryColor;
+                container.StrokeThickness = 2.5;
+            };
+
+            entry.Unfocused += (s, e) =>
+            {
+                container.Stroke = outlineColor;
+                container.StrokeThickness = 1.5;
+            };
+
+            textStack.Children.Add(label);
+            textStack.Children.Add(entry);
+
+            Grid.SetColumn(textStack, 0);
+            mainGrid.Children.Add(textStack);
+
+            // Trailing icon
             if (isDateField)
             {
-                var dateIcon = new Label
+                var iconButton = new Border
+                {
+                    BackgroundColor = !isReadOnly ? Color.FromArgb("#E3F2FD") : Color.FromArgb("#F5F5F5"),
+                    StrokeThickness = 0,
+                    StrokeShape = new RoundRectangle { CornerRadius = 20 },
+                    Padding = new Thickness(8),
+                    WidthRequest = 40,
+                    HeightRequest = 40,
+                    VerticalOptions = LayoutOptions.Center,
+                    Margin = new Thickness(8, 0, 0, 0)
+                };
+
+                var icon = new Label
                 {
                     Text = "📅",
-                    FontSize = 16,
-                    TextColor = isReadOnly ? Color.FromArgb("#999999") : Color.FromArgb("#4CAF50"),
-                    VerticalOptions = LayoutOptions.Center,
-                    HorizontalOptions = LayoutOptions.End,
-                    Margin = new Thickness(0, 0, 16, 0)
+                    FontSize = 20,
+                    HorizontalOptions = LayoutOptions.Center,
+                    VerticalOptions = LayoutOptions.Center
                 };
+
+                iconButton.Content = icon;
 
                 if (!isReadOnly)
                 {
                     var tapGesture = new TapGestureRecognizer();
-                    tapGesture.Tapped += async (s, e) => await OpenDatePicker(entry);
-                    dateIcon.GestureRecognizers.Add(tapGesture);
+                    tapGesture.Tapped += async (s, e) =>
+                    {
+                        await iconButton.ScaleTo(0.85, 100);
+                        await iconButton.ScaleTo(1, 100);
+                        await OpenDatePicker(entry);
+                    };
+                    iconButton.GestureRecognizers.Add(tapGesture);
                 }
 
-                grid.Children.Add(dateIcon);
+                Grid.SetColumn(iconButton, 1);
+                mainGrid.Children.Add(iconButton);
             }
+            else if (!isReadOnly)
+            {
+                var editIconBorder = new Border
+                {
+                    BackgroundColor = Color.FromArgb("#E8F5E9"),
+                    StrokeThickness = 0,
+                    StrokeShape = new RoundRectangle { CornerRadius = 20 },
+                    Padding = new Thickness(8),
+                    WidthRequest = 40,
+                    HeightRequest = 40,
+                    VerticalOptions = LayoutOptions.Center,
+                    Margin = new Thickness(8, 0, 0, 0)
+                };
+
+                var editIcon = new Label
+                {
+                    Text = "✏️",
+                    FontSize = 18,
+                    HorizontalOptions = LayoutOptions.Center,
+                    VerticalOptions = LayoutOptions.Center
+                };
+
+                editIconBorder.Content = editIcon;
+                Grid.SetColumn(editIconBorder, 1);
+                mainGrid.Children.Add(editIconBorder);
+            }
+
+            container.Content = mainGrid;
+            grid.Children.Add(container);
 
             return grid;
         }
@@ -2719,40 +3400,76 @@ namespace PMEGP_Physical_V
         {
             var grid = new Grid
             {
-                Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0)
+                Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0, 12, 0, 0)
             };
 
             bool isReadOnly = forceReadOnly || !(_isEditable || forceEditable);
 
-            var editor = new Editor
+            var primaryColor = Color.FromArgb("#1976D2");
+            var surfaceColor = !isReadOnly ? Colors.White : Color.FromArgb("#F5F5F5");
+            var onSurfaceColor = !isReadOnly ? Color.FromArgb("#1C1B1F") : Color.FromArgb("#79747E");
+            var outlineColor = !isReadOnly ? Color.FromArgb("#1976D2") : Color.FromArgb("#BDBDBD");
+
+            var container = new Border
             {
-                Text = text,
-                FontSize = 16,
-                TextColor = Colors.Black,
-                BackgroundColor = isReadOnly ? Color.FromArgb("#F8F8F8") : Colors.White, // Light gray background for non-editable
-                IsReadOnly = isReadOnly,
-                IsEnabled = !isReadOnly,
-                HeightRequest = 80,
-                VerticalOptions = LayoutOptions.Center
+                BackgroundColor = surfaceColor,
+                Stroke = outlineColor,
+                StrokeThickness = 1.5,
+                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                Padding = new Thickness(16, 8, 16, 8),
+                MinimumHeightRequest = 100,
+                Shadow = !isReadOnly ? new Shadow
+                {
+                    Brush = new SolidColorBrush(Color.FromArgb("#40000000")),
+                    Opacity = 0.15f,
+                    Radius = 4,
+                    Offset = new Point(0, 2)
+                } : null
+            };
+
+            var textStack = new VerticalStackLayout
+            {
+                Spacing = 4
             };
 
             var label = new Label
             {
                 Text = placeholder,
                 FontSize = 12,
-                TextColor = Color.FromArgb("#666666"),
-                BackgroundColor = Colors.White,
-                Padding = new Thickness(4, 0),
-                Margin = new Thickness(16, -6, 0, 0),
-                HorizontalOptions = LayoutOptions.Start,
-                VerticalOptions = LayoutOptions.Start
+                TextColor = !isReadOnly ? primaryColor : Color.FromArgb("#9E9E9E"),
+                FontAttributes = FontAttributes.Bold
             };
 
-            grid.Children.Add(editor);
-            if (!string.IsNullOrEmpty(placeholder))
+            var editor = new Editor
             {
-                grid.Children.Add(label);
-            }
+                Text = text,
+                FontSize = 15,
+                TextColor = onSurfaceColor,
+                BackgroundColor = Colors.Transparent,
+                IsReadOnly = isReadOnly,
+                IsEnabled = !isReadOnly,
+                MinimumHeightRequest = 60,
+                AutoSize = EditorAutoSizeOption.TextChanges,
+                VerticalOptions = LayoutOptions.Fill
+            };
+
+            editor.Focused += (s, e) =>
+            {
+                container.Stroke = primaryColor;
+                container.StrokeThickness = 2.5;
+            };
+
+            editor.Unfocused += (s, e) =>
+            {
+                container.Stroke = outlineColor;
+                container.StrokeThickness = 1.5;
+            };
+
+            textStack.Children.Add(label);
+            textStack.Children.Add(editor);
+
+            container.Content = textStack;
+            grid.Children.Add(container);
 
             return grid;
         }
@@ -2761,21 +3478,55 @@ namespace PMEGP_Physical_V
         {
             var grid = new Grid
             {
-                Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0)
+                Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0, 12, 0, 0)
+            };
+
+            var primaryColor = Color.FromArgb("#1976D2");
+            var surfaceColor = !isDisabled ? Colors.White : Color.FromArgb("#F5F5F5");
+            var onSurfaceColor = !isDisabled ? Color.FromArgb("#1C1B1F") : Color.FromArgb("#79747E");
+            var outlineColor = !isDisabled ? Color.FromArgb("#1976D2") : Color.FromArgb("#BDBDBD");
+
+            var container = new Border
+            {
+                BackgroundColor = surfaceColor,
+                Stroke = outlineColor,
+                StrokeThickness = 1.5,
+                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                Padding = new Thickness(16, 4, 16, 4),
+                MinimumHeightRequest = 64,
+                Shadow = !isDisabled ? new Shadow
+                {
+                    Brush = new SolidColorBrush(Color.FromArgb("#40000000")),
+                    Opacity = 0.15f,
+                    Radius = 4,
+                    Offset = new Point(0, 2)
+                } : null
+            };
+
+            var textStack = new VerticalStackLayout
+            {
+                Spacing = 2,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            var label = new Label
+            {
+                Text = placeholder,
+                FontSize = 12,
+                TextColor = !isDisabled ? primaryColor : Color.FromArgb("#9E9E9E"),
+                FontAttributes = FontAttributes.Bold
             };
 
             var picker = new Picker
             {
-                Title = placeholder,
                 FontSize = 16,
-                TextColor = isDisabled ? Color.FromArgb("#999999") : Colors.Black,
-                BackgroundColor = isDisabled ? Color.FromArgb("#F0F0F0") : Colors.White,
+                TextColor = onSurfaceColor,
+                BackgroundColor = Colors.Transparent,
                 IsEnabled = !isDisabled,
-                HeightRequest = 56,
-                VerticalOptions = LayoutOptions.Center
+                VerticalOptions = LayoutOptions.Center,
+                Margin = new Thickness(0, -4, 0, 0)
             };
 
-            // Add dropdown options for Verification Status
             picker.Items.Add("Completed");
             picker.Items.Add("Pending");
 
@@ -2784,42 +3535,63 @@ namespace PMEGP_Physical_V
                 picker.SelectedItem = selectedValue;
             }
 
-            var label = new Label
+            picker.Focused += (s, e) =>
             {
-                Text = placeholder,
-                FontSize = 12,
-                TextColor = Color.FromArgb("#666666"),
-                BackgroundColor = Colors.White,
-                Padding = new Thickness(4, 0),
-                Margin = new Thickness(16, -6, 0, 0),
-                HorizontalOptions = LayoutOptions.Start,
-                VerticalOptions = LayoutOptions.Start
+                container.Stroke = primaryColor;
+                container.StrokeThickness = 2.5;
             };
 
-            grid.Children.Add(picker);
-            grid.Children.Add(label);
+            picker.Unfocused += (s, e) =>
+            {
+                container.Stroke = outlineColor;
+                container.StrokeThickness = 1.5;
+            };
+
+            textStack.Children.Add(label);
+            textStack.Children.Add(picker);
+
+            container.Content = textStack;
+            grid.Children.Add(container);
 
             return grid;
         }
 
         private StackLayout CreateSwitchSection(string text, bool isOn, bool enableSwitch = false)
         {
-            var section = new StackLayout
+            var container = new Border
             {
-                Orientation = StackOrientation.Horizontal,
-                Spacing = 15,
-                Margin = new Thickness(0, 10),
-                VerticalOptions = LayoutOptions.Center
+                BackgroundColor = Colors.White,
+                Stroke = Color.FromArgb("#BDBDBD"),
+                StrokeThickness = 1.5,
+                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                Padding = new Thickness(16, 12),
+                Margin = new Thickness(0, 12, 0, 0),
+                Shadow = new Shadow
+                {
+                    Brush = new SolidColorBrush(Color.FromArgb("#40000000")),
+                    Opacity = 0.15f,
+                    Radius = 4,
+                    Offset = new Point(0, 2)
+                }
+            };
+
+            var section = new Grid
+            {
+                ColumnDefinitions =
+        {
+            new ColumnDefinition { Width = GridLength.Star },
+            new ColumnDefinition { Width = GridLength.Auto }
+        },
+                ColumnSpacing = 15
             };
 
             var label = new Label
             {
                 Text = text,
-                FontSize = 16,
-                TextColor = Color.FromArgb("#FF6B35"),
+                FontSize = 15,
+                TextColor = Color.FromArgb("#1C1B1F"),
                 FontAttributes = FontAttributes.Bold,
-                VerticalOptions = LayoutOptions.Center,
-                HorizontalOptions = LayoutOptions.StartAndExpand
+                VerticalOptions = LayoutOptions.Center
             };
 
             var switchControl = new Switch
@@ -2828,14 +3600,21 @@ namespace PMEGP_Physical_V
                 OnColor = Color.FromArgb("#4CAF50"),
                 ThumbColor = Colors.White,
                 VerticalOptions = LayoutOptions.Center,
-                HorizontalOptions = LayoutOptions.End,
-                IsEnabled = enableSwitch // Make it non-interactive for readonly form
+                IsEnabled = enableSwitch
             };
+
+            Grid.SetColumn(label, 0);
+            Grid.SetColumn(switchControl, 1);
 
             section.Children.Add(label);
             section.Children.Add(switchControl);
 
-            return section;
+            container.Content = section;
+
+            var wrapper = new StackLayout();
+            wrapper.Children.Add(container);
+
+            return wrapper;
         }
 
         private StackLayout CreateRadioButton(string text, bool isSelected, bool enableInteraction = false)
@@ -2917,8 +3696,9 @@ namespace PMEGP_Physical_V
                 }
 
                 // Save remarks
-                System.Diagnostics.Debug.WriteLine($"Status change remarks: {remarks}");
-                // TODO: Store remarks to send with API
+                //System.Diagnostics.Debug.WriteLine($"Status change remarks: {remarks}");
+                // Store remarks in state for API submission
+                _formState["VerificationStatus_ChangeRemarks"] = remarks; // NEW: Save remarks
             }
             // Check if changing back to Working from Defunct/Non-Traceable
             else if ((_previousVerificationStatus == "Defunct" || _previousVerificationStatus == "Non-Traceable") && newStatus == "Working")
@@ -2932,10 +3712,25 @@ namespace PMEGP_Physical_V
 
                 // Update location fields
                 UpdateLocationFields(location.Value.latitude, location.Value.longitude);
+
+                // NEW: Save location change info to state
+                _formState["VerificationStatus_LocationUpdated"] = true;
+                _formState["VerificationStatus_NewLatitude"] = location.Value.latitude;
+                _formState["VerificationStatus_NewLongitude"] = location.Value.longitude;
             }
 
             // Update previous status
             _previousVerificationStatus = newStatus;
+
+            // ✨ NEW CODE STARTS HERE ✨
+            // Save the selected radio button status to state
+            _formState["VerificationStatus_Selected"] = newStatus;
+
+            // Also save to step-specific tracking for verification section (Step 2)
+            _formState["Step2_VerificationStatus"] = newStatus;
+
+            //System.Diagnostics.Debug.WriteLine($"✅ Radio button state saved: {newStatus}");
+            // ✨ NEW CODE ENDS HERE ✨
 
             // Find parent StackLayout containing all radio buttons
             var parentStack = selectedRadio.Parent?.Parent as StackLayout;
@@ -3096,8 +3891,21 @@ namespace PMEGP_Physical_V
             return tcs.Task;
         }
 
-        private Task<(double latitude, double longitude)?> ShowLocationMapModal()
+        private async Task<(double latitude, double longitude)?> ShowLocationMapModal()
         {
+            // Request location permissions first
+            var status = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+            if (status != PermissionStatus.Granted)
+            {
+                status = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+            }
+
+            if (status != PermissionStatus.Granted)
+            {
+                await DisplayAlert("Permission Denied", "Location permission is required", "OK");
+                return null;
+            }
+
             var tcs = new TaskCompletionSource<(double latitude, double longitude)?>();
 
             var modal = new AbsoluteLayout
@@ -3311,34 +4119,183 @@ namespace PMEGP_Physical_V
                 rootGrid.Children.Add(modal);
             }
 
-            return tcs.Task;
+            return await tcs.Task;
         }
 
         private void UpdateLocationFields(double latitude, double longitude)
         {
-            // Find and update Longitude field
-            var longitudeEntry = FindEntryByPlaceholder("Longitude");
-            if (longitudeEntry != null)
+            System.Diagnostics.Debug.WriteLine($"🗺️ Updating location fields: Lat={latitude}, Lng={longitude}");
+
+            // Update _apiData object
+            if (_apiData?.phyVerificationModel != null)
             {
-                longitudeEntry.Text = longitude.ToString("F6");
+                _apiData.phyVerificationModel.Latitude = latitude.ToString("F6");
+                _apiData.phyVerificationModel.Longitude = longitude.ToString("F6");
+                _apiData.phyVerificationModel.GeoTagID = GenerateGeoTagId(latitude, longitude);
             }
 
-            // Find and update Latitude field
-            var latitudeEntry = FindEntryByPlaceholder("Latitude");
-            if (latitudeEntry != null)
+            // Update state
+            _formState["Longitude"] = longitude.ToString("F6");
+            _formState["Latitude"] = latitude.ToString("F6");
+            _formState["GeoTaggingID"] = GenerateGeoTagId(latitude, longitude);
+
+            // Find and update UI fields
+            UpdateLocationFieldInUI("Longitude", longitude.ToString("F6"));
+            UpdateLocationFieldInUI("Latitude", latitude.ToString("F6"));
+            UpdateLocationFieldInUI("GeoTaggingID", GenerateGeoTagId(latitude, longitude));
+
+            // Reload map with new coordinates
+            RefreshMapWithNewLocation(latitude, longitude);
+
+            System.Diagnostics.Debug.WriteLine($"✅ Location fields and map updated successfully");
+        }
+
+        /// <summary>
+        /// Helper method to update a specific location field in the UI
+        /// </summary>
+        private void UpdateLocationFieldInUI(string fieldName, string value)
+        {
+            foreach (var child in ContentContainer.Children)
             {
-                latitudeEntry.Text = latitude.ToString("F6");
+                if (child is StackLayout stack)
+                {
+                    UpdateFieldInStack(stack, fieldName, value);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Recursively search and update field in StackLayout
+        /// </summary>
+        private void UpdateFieldInStack(StackLayout stack, string fieldName, string value)
+        {
+            foreach (var item in stack.Children)
+            {
+                if (item is Grid grid)
+                {
+                    var border = grid.Children.OfType<Border>().FirstOrDefault();
+                    if (border?.Content is Grid contentGrid)
+                    {
+                        var vertStack = contentGrid.Children.OfType<VerticalStackLayout>().FirstOrDefault();
+                        if (vertStack != null)
+                        {
+                            var label = vertStack.Children.OfType<Label>().FirstOrDefault();
+                            var entry = vertStack.Children.OfType<Entry>().FirstOrDefault();
+
+                            if (label != null && entry != null)
+                            {
+                                string key = NormalizeKey(label.Text);
+                                if (key == NormalizeKey(fieldName))
+                                {
+                                    entry.Text = value;
+                                    System.Diagnostics.Debug.WriteLine($"   ✔️ Updated UI field: {fieldName} = {value}");
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (item is StackLayout nestedStack)
+                {
+                    UpdateFieldInStack(nestedStack, fieldName, value);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Refresh map with new coordinates
+        /// </summary>
+        private void RefreshMapWithNewLocation(double latitude, double longitude)
+        {
+            try
+            {
+                // Find the map frame in ContentContainer
+                Frame mapFrame = null;
+
+                foreach (var child in ContentContainer.Children)
+                {
+                    if (child is StackLayout stack)
+                    {
+                        mapFrame = FindMapFrame(stack);
+                        if (mapFrame != null) break;
+                    }
+                }
+
+                if (mapFrame != null)
+                {
+                    // Create new map WebView with updated coordinates
+                    var mapWebView = new WebView
+                    {
+                        HorizontalOptions = LayoutOptions.Fill,
+                        VerticalOptions = LayoutOptions.Fill
+                    };
+
+                    var htmlSource = new HtmlWebViewSource
+                    {
+                        Html = $@"
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'>
+                    <style>
+                        * {{ margin: 0; padding: 0; }}
+                        body, html {{ height: 100%; width: 100%; overflow: hidden; }}
+                        #map {{ height: 100%; width: 100%; }}
+                    </style>
+                </head>
+                <body>
+                    <iframe 
+                        id='map'
+                        frameborder='0' 
+                        style='border:0'
+                        src='https://www.google.com/maps?q={latitude},{longitude}&z=15&output=embed'
+                        allowfullscreen>
+                    </iframe>
+                </body>
+                </html>"
+                    };
+
+                    mapWebView.Source = htmlSource;
+                    mapFrame.Content = mapWebView;
+
+                    System.Diagnostics.Debug.WriteLine($"   🗺️ Map refreshed with new location");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"   ⚠️ Map frame not found in UI");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"   ❌ Error refreshing map: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Recursively find map frame in StackLayout hierarchy
+        /// </summary>
+        private Frame FindMapFrame(StackLayout stack)
+        {
+            foreach (var child in stack.Children)
+            {
+                if (child is Frame frame)
+                {
+                    // Check if this is a map frame (has WebView content)
+                    if (frame.Content is WebView)
+                    {
+                        return frame;
+                    }
+                }
+
+                if (child is StackLayout nestedStack)
+                {
+                    var found = FindMapFrame(nestedStack);
+                    if (found != null) return found;
+                }
             }
 
-            // Generate and update Geo Tagging ID
-            var geoTagEntry = FindEntryByPlaceholder("GeoTaggingID");
-            if (geoTagEntry != null)
-            {
-                string geoTagId = GenerateGeoTagId(latitude, longitude);
-                geoTagEntry.Text = geoTagId;
-            }
-
-            System.Diagnostics.Debug.WriteLine($"Location updated: Lat={latitude}, Lng={longitude}");
+            return null;
         }
 
         private Entry FindEntryByPlaceholder(string placeholder)
@@ -3443,7 +4400,7 @@ namespace PMEGP_Physical_V
         private async Task SaveBeneficiaryData()
         {
             // Skip API call for Beneficiary section
-            System.Diagnostics.Debug.WriteLine("Beneficiary data saved locally (no API call)");
+            //System.Diagnostics.Debug.WriteLine("Beneficiary data saved locally (no API call)");
             await Task.CompletedTask;
         }
 
@@ -3451,12 +4408,15 @@ namespace PMEGP_Physical_V
         {
             try
             {
+                var veriStatus = GetVerificationStatusCode();
+                //System.Diagnostics.Debug.WriteLine($"Saving Verification Status: {veriStatus}");
+
                 var payload = new
                 {
                     ApplID = _applId,
                     UnitName = FindEntryValue("UnitName"),
                     UnitAddr = FindEditorValue("UpdatedUnitAddress"),
-                    VeriStatus = GetVerificationStatusCode(),
+                    VeriStatus = veriStatus,
                     UnitArea = FindEntryValue("UnitArea") ?? "",
                     UnitEstDate = ConvertToApiDateFormat(FindEntryValue("UnitEstablishmentDate")),
                     UnitGSTNo = FindEntryValue("GSTRegistrationNumber"),
@@ -3467,7 +4427,12 @@ namespace PMEGP_Physical_V
                     Latitude = FindEntryValue("Latitude")
                 };
 
-                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+                SaveCurrentStepState();
+
+                await CallSaveApiWithReload("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload, 2);
+
+                _previousVerificationStatus = GetVerificationStatusText();
+                //System.Diagnostics.Debug.WriteLine($"Updated previous status to: {_previousVerificationStatus}");
             }
             catch (Exception ex)
             {
@@ -3485,8 +4450,8 @@ namespace PMEGP_Physical_V
                     EDPPeriod = FindEntryValue("EDPTrainingPeriod"),
                     EDPInsAdress = FindEditorValue("AddressofInstitute")
                 };
-
-                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+                SaveCurrentStepState();
+                await CallSaveApiWithReload("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload, 3);
             }
             catch (Exception ex)
             {
@@ -3514,7 +4479,7 @@ namespace PMEGP_Physical_V
                 var unitVerJson = JsonSerializer.Serialize(unitVerPayload);
                 var unitVerContent = new StringContent(unitVerJson, System.Text.Encoding.UTF8, "application/json");
 
-                System.Diagnostics.Debug.WriteLine($"Updating Unit Verification Status: {unitVerJson}");
+                //System.Diagnostics.Debug.WriteLine($"Updating Unit Verification Status: {unitVerJson}");
 
                 var unitVerResponse = await _httpClient.PostAsync(
                     "https://115.124.125.153/MobileApp/Insert_UVData_PV",
@@ -3522,7 +4487,7 @@ namespace PMEGP_Physical_V
                 );
 
                 var unitVerResponseContent = await unitVerResponse.Content.ReadAsStringAsync();
-                System.Diagnostics.Debug.WriteLine($"Unit Ver Response: {unitVerResponseContent}");
+                //System.Diagnostics.Debug.WriteLine($"Unit Ver Response: {unitVerResponseContent}");
 
                 if (!unitVerResponse.IsSuccessStatusCode)
                 {
@@ -3546,7 +4511,7 @@ namespace PMEGP_Physical_V
                 var finalSubJson = JsonSerializer.Serialize(finalSubPayload);
                 var finalSubContent = new StringContent(finalSubJson, System.Text.Encoding.UTF8, "application/json");
 
-                System.Diagnostics.Debug.WriteLine($"Calling Final Submission: {finalSubJson}");
+                //System.Diagnostics.Debug.WriteLine($"Calling Final Submission: {finalSubJson}");
 
                 var finalSubResponse = await _httpClient.PostAsync(
                     "https://115.124.125.153/MobileApp/PhyVerFinalSub_TP",
@@ -3554,11 +4519,19 @@ namespace PMEGP_Physical_V
                 );
 
                 var finalSubResponseContent = await finalSubResponse.Content.ReadAsStringAsync();
-                System.Diagnostics.Debug.WriteLine($"Final Submission Response: {finalSubResponseContent}");
+                //System.Diagnostics.Debug.WriteLine($"Final Submission Response: {finalSubResponseContent}");
 
                 if (finalSubResponse.IsSuccessStatusCode)
                 {
                     await DisplayAlert("Success", "Unit verification completed and submitted successfully!", "OK");
+                    var detailsPage = Navigation.NavigationStack.OfType<DetailsPage>().FirstOrDefault();
+                    if (detailsPage != null)
+                    {
+                        // Use reflection to set private field
+                        var fieldInfo = typeof(DetailsPage).GetField("_shouldRefreshOnAppearing",
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        fieldInfo?.SetValue(detailsPage, true);
+                    }
                     await Navigation.PopAsync();
                 }
                 else
@@ -3568,7 +4541,7 @@ namespace PMEGP_Physical_V
             }
             catch (HttpRequestException ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Network Error: {ex.Message}");
+                //System.Diagnostics.Debug.WriteLine($"Network Error: {ex.Message}");
                 await DisplayAlert("Network Error", $"Unable to connect to server: {ex.Message}", "OK");
             }
             catch (Exception ex)
@@ -3591,8 +4564,8 @@ namespace PMEGP_Physical_V
                     ExportDetails = FindEntryValue("ExportDetail-value"),
                     ExportDetCount = FindEntryValue("ExportDetail-CountryofExport")
                 };
-
-                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+                SaveCurrentStepState();
+                await CallSaveApiWithReload("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload, 6);
             }
             catch (Exception ex)
             {
@@ -3621,8 +4594,8 @@ namespace PMEGP_Physical_V
                     TotalEMP = FindEntryValue("TotalNumberOfEmployees"),
                     AvgWgPaidPerMonth = FindEntryValue("AverageWagespaidperemployeepermonth")
                 };
-
-                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+                SaveCurrentStepState();
+                await CallSaveApiWithReload("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload, 7);
             }
             catch (Exception ex)
             {
@@ -3636,7 +4609,7 @@ namespace PMEGP_Physical_V
             {
                 // TODO: Implement document upload API
                 // Upload documents from _uploadedDocuments list
-                System.Diagnostics.Debug.WriteLine("Document upload to be implemented");
+                //System.Diagnostics.Debug.WriteLine("Document upload to be implemented");
                 await Task.CompletedTask;
             }
             catch (Exception ex)
@@ -3658,8 +4631,8 @@ namespace PMEGP_Physical_V
                     EnumRem = FindEditorValue("EnumeratorRemark"),
                     IsSignBoardIns = FindSwitchValue("ProminentSignBoardinstalled") ? 1 : 0
                 };
-
-                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+                SaveCurrentStepState();
+                await CallSaveApiWithReload("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload, 9);
             }
             catch (Exception ex)
             {
@@ -3679,7 +4652,7 @@ namespace PMEGP_Physical_V
 
                 if (response.IsSuccessStatusCode)
                 {
-                    System.Diagnostics.Debug.WriteLine($"API Success: {responseContent}");
+                    //System.Diagnostics.Debug.WriteLine($"API Success: {responseContent}");
                     await DisplayAlert("Success", "Data saved successfully", "OK");
                 }
                 else
@@ -3694,6 +4667,85 @@ namespace PMEGP_Physical_V
             catch (Exception ex)
             {
                 throw new Exception($"Save failed: {ex.Message}");
+            }
+        }
+
+        private async Task CallSaveApiWithReload(string url, object payload, int stepToReload)
+        {
+            try
+            {
+                //System.Diagnostics.Debug.WriteLine($"💾 Saving data for step {stepToReload}...");
+
+                // Save current state before API call
+                SaveCurrentStepState();
+
+                // Show loading overlay
+                ShowSaveLoadingOverlay();
+
+                await CallSaveApi(url, payload);
+
+                // Reload the section with fresh data from API
+                LoadApiDataAsync();
+                LoadStepContent(stepToReload);
+
+                // Wait for UI to render
+                await Task.Delay(200);
+
+                // Restore user-modified values (this overwrites API data with user changes)
+                RestoreStepState();
+
+                HideSaveLoadingOverlay();
+
+                //System.Diagnostics.Debug.WriteLine($"✅ Save and reload complete for step {stepToReload}");
+            }
+            catch (Exception ex)
+            {
+                HideSaveLoadingOverlay();
+                System.Diagnostics.Debug.WriteLine($"❌ Save failed: {ex.Message}");
+                throw;
+            }
+        }
+
+        private void ShowSaveLoadingOverlay()
+        {
+            var overlay = new AbsoluteLayout
+            {
+                BackgroundColor = Color.FromArgb("#AA000000"),
+                HorizontalOptions = LayoutOptions.Fill,
+                VerticalOptions = LayoutOptions.Fill
+            };
+
+            var spinner = new ActivityIndicator
+            {
+                IsRunning = true,
+                Color = Colors.White,
+                WidthRequest = 50,
+                HeightRequest = 50
+            };
+
+            AbsoluteLayout.SetLayoutBounds(spinner, new Rect(0.5, 0.5, AbsoluteLayout.AutoSize, AbsoluteLayout.AutoSize));
+            AbsoluteLayout.SetLayoutFlags(spinner, AbsoluteLayoutFlags.PositionProportional);
+
+            overlay.Children.Add(spinner);
+
+            if (this.Content is Grid rootGrid)
+            {
+                Grid.SetRowSpan(overlay, 3);
+                Grid.SetRow(overlay, 0);
+                rootGrid.Children.Add(overlay);
+                overlay.ClassId = "SaveLoadingOverlay";
+            }
+        }
+
+        private void HideSaveLoadingOverlay()
+        {
+            if (this.Content is Grid rootGrid)
+            {
+                var overlay = rootGrid.Children.FirstOrDefault(c => c is AbsoluteLayout al && al.ClassId == "SaveLoadingOverlay");
+                if (overlay != null)
+                {
+                    rootGrid.Children.Remove(overlay);
+                }
             }
         }
 
