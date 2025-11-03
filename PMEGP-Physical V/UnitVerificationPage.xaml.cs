@@ -178,6 +178,15 @@ namespace PMEGP_Physical_V
         [JsonPropertyName("EmpMinority")]
         public int? EmpMinority { get; set; }
 
+        [JsonPropertyName("FullTime_Emp")]
+        public string FullTime_Emp { get; set; }
+
+        [JsonPropertyName("PartTime_Emp")]
+        public string PartTime_Emp { get; set; }
+
+        [JsonPropertyName("Seasonal_Emp")]
+        public string Seasonal_Emp { get; set; }
+
         [JsonPropertyName("TotalEMP")]
         public int? TotalEMP { get; set; }
 
@@ -1942,12 +1951,20 @@ namespace PMEGP_Physical_V
                 form.Children.Add(CreateFormEntry("ST*", _apiData.phyVerificationModel?.EmpST?.ToString() ?? ""));
                 form.Children.Add(CreateFormEntry("OBC*", _apiData.phyVerificationModel?.EmpOBC?.ToString() ?? ""));
                 form.Children.Add(CreateFormEntry("Minority*", _apiData.phyVerificationModel?.EmpMinority?.ToString() ?? ""));
-                form.Children.Add(CreateFormEntry("Full-Time Employees", "0", false, false, _isEditable));
-                form.Children.Add(CreateFormEntry("Part-Time Employees", "0", false, false, _isEditable));
-                form.Children.Add(CreateFormEntry("Seasonal Employees", "0", false, false, _isEditable));
+
+                // ✅ FIXED: Now using string properties, no .ToString() needed
+                form.Children.Add(CreateFormEntry("Full-Time Employees",
+                    _apiData.phyVerificationModel?.FullTime_Emp ?? "0",
+                    false, false, _isEditable));
+                form.Children.Add(CreateFormEntry("Part-Time Employees",
+                    _apiData.phyVerificationModel?.PartTime_Emp ?? "0",
+                    false, false, _isEditable));
+                form.Children.Add(CreateFormEntry("Seasonal Employees",
+                    _apiData.phyVerificationModel?.Seasonal_Emp ?? "0",
+                    false, false, _isEditable));
+
                 form.Children.Add(CreateFormEntry("Total Number Of Employees*", _apiData.phyVerificationModel?.TotalEMP?.ToString() ?? ""));
 
-                // Average Wages with number-to-words
                 var wagesFrame = CreateFormEntry("Average Wages paid per employee per month", _apiData.phyVerificationModel?.AvgWgPaidPerMonth?.ToString("F2") ?? "");
                 form.Children.Add(wagesFrame);
 
@@ -2847,14 +2864,29 @@ namespace PMEGP_Physical_V
             var radioGroup = new StackLayout
             {
                 Orientation = StackOrientation.Horizontal,
-                Spacing = 15, // Reduced from 25
-                Margin = new Thickness(5, 5), // Reduced left margin
+                Spacing = 15,
+                Margin = new Thickness(5, 5),
                 HorizontalOptions = LayoutOptions.Fill
             };
 
-            var isWorking = veriStatus == "WR";
-            var isDefunct = veriStatus == "DF";
-            var isNonTraceable = veriStatus == "NT";
+            // ✅ Check formState first, then fallback to API data
+            string currentStatus = null;
+            if (_formState.ContainsKey("VerificationStatus_Selected"))
+            {
+                currentStatus = _formState["VerificationStatus_Selected"]?.ToString();
+                System.Diagnostics.Debug.WriteLine($"📍 Restoring status from formState: {currentStatus}");
+            }
+            else if (!string.IsNullOrEmpty(veriStatus))
+            {
+                currentStatus = veriStatus == "WR" ? "Working" :
+                               veriStatus == "DF" ? "Defunct" :
+                               veriStatus == "NT" ? "Non-Traceable" : null;
+                System.Diagnostics.Debug.WriteLine($"📍 Using status from API: {currentStatus}");
+            }
+
+            var isWorking = currentStatus == "Working";
+            var isDefunct = currentStatus == "Defunct";
+            var isNonTraceable = currentStatus == "Non-Traceable";
 
             radioGroup.Children.Add(CreateRadioButton("Working", isWorking, enableSelection));
             radioGroup.Children.Add(CreateRadioButton("Defunct", isDefunct, enableSelection));
@@ -2997,14 +3029,22 @@ namespace PMEGP_Physical_V
                 summary.Children.Add(CreateFormEntry("ST*", _apiData.phyVerificationModel?.EmpST?.ToString() ?? "", false, false, false, true));
                 summary.Children.Add(CreateFormEntry("OBC*", _apiData.phyVerificationModel?.EmpOBC?.ToString() ?? "", false, false, false, true));
                 summary.Children.Add(CreateFormEntry("Minority*", _apiData.phyVerificationModel?.EmpMinority?.ToString() ?? "", false, false, false, true));
-                summary.Children.Add(CreateFormEntry("Full-Time Employees", "0", false, false, false, true));
-                summary.Children.Add(CreateFormEntry("Part-Time Employees", "0", false, false, false, true));
-                summary.Children.Add(CreateFormEntry("Seasonal Employees", "0", false, false, false, true));
+
+                // ✅ FIXED: Show actual values from API
+                summary.Children.Add(CreateFormEntry("Full-Time Employees",
+                    _apiData.phyVerificationModel?.FullTime_Emp?.ToString() ?? "0",
+                    false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Part-Time Employees",
+                    _apiData.phyVerificationModel?.PartTime_Emp?.ToString() ?? "0",
+                    false, false, false, true));
+                summary.Children.Add(CreateFormEntry("Seasonal Employees",
+                    _apiData.phyVerificationModel?.Seasonal_Emp?.ToString() ?? "0",
+                    false, false, false, true));
+
                 summary.Children.Add(CreateFormEntry("Total Number Of Employees*", _apiData.phyVerificationModel?.TotalEMP?.ToString() ?? "", false, false, false, true));
 
                 var wagesFrame = CreateFormEntry("Average Wages paid per employee per month", _apiData.phyVerificationModel?.AvgWgPaidPerMonth?.ToString("F2") ?? "", false, false, false, true);
                 summary.Children.Add(wagesFrame);
-
             }
             return summary;
         }
@@ -3685,20 +3725,20 @@ namespace PMEGP_Physical_V
         {
             var newStatus = selectedRadio.ClassId; // "Working", "Defunct", or "Non-Traceable"
 
+            System.Diagnostics.Debug.WriteLine($"📍 Radio button tapped: {newStatus}");
+
             // Check if changing from Working to Defunct or Non-Traceable
             if (_previousVerificationStatus == "Working" && (newStatus == "Defunct" || newStatus == "Non-Traceable"))
             {
                 var remarks = await ShowVerificationRemarksModal($"Changing to {newStatus}", "⚠️");
                 if (remarks == null)
                 {
-                    // User cancelled, don't change status
+                    System.Diagnostics.Debug.WriteLine($"📍 User cancelled status change");
                     return;
                 }
 
-                // Save remarks
-                //System.Diagnostics.Debug.WriteLine($"Status change remarks: {remarks}");
-                // Store remarks in state for API submission
-                _formState["VerificationStatus_ChangeRemarks"] = remarks; // NEW: Save remarks
+                System.Diagnostics.Debug.WriteLine($"📍 Status change remarks: {remarks}");
+                _formState["VerificationStatus_ChangeRemarks"] = remarks;
             }
             // Check if changing back to Working from Defunct/Non-Traceable
             else if ((_previousVerificationStatus == "Defunct" || _previousVerificationStatus == "Non-Traceable") && newStatus == "Working")
@@ -3706,31 +3746,22 @@ namespace PMEGP_Physical_V
                 var location = await ShowLocationMapModal();
                 if (location == null)
                 {
-                    // User cancelled, don't change status
+                    System.Diagnostics.Debug.WriteLine($"📍 User cancelled location update");
                     return;
                 }
 
-                // Update location fields
                 UpdateLocationFields(location.Value.latitude, location.Value.longitude);
 
-                // NEW: Save location change info to state
                 _formState["VerificationStatus_LocationUpdated"] = true;
                 _formState["VerificationStatus_NewLatitude"] = location.Value.latitude;
                 _formState["VerificationStatus_NewLongitude"] = location.Value.longitude;
             }
 
-            // Update previous status
+            // ✅ CRITICAL: Save the selected status to formState
+            _formState["VerificationStatus_Selected"] = newStatus;
             _previousVerificationStatus = newStatus;
 
-            // ✨ NEW CODE STARTS HERE ✨
-            // Save the selected radio button status to state
-            _formState["VerificationStatus_Selected"] = newStatus;
-
-            // Also save to step-specific tracking for verification section (Step 2)
-            _formState["Step2_VerificationStatus"] = newStatus;
-
-            //System.Diagnostics.Debug.WriteLine($"✅ Radio button state saved: {newStatus}");
-            // ✨ NEW CODE ENDS HERE ✨
+            System.Diagnostics.Debug.WriteLine($"📍 Saved status to formState: {newStatus}");
 
             // Find parent StackLayout containing all radio buttons
             var parentStack = selectedRadio.Parent?.Parent as StackLayout;
@@ -3762,6 +3793,8 @@ namespace PMEGP_Physical_V
                 VerticalOptions = LayoutOptions.Center
             };
             selectedRadio.Content = innerDot;
+
+            System.Diagnostics.Debug.WriteLine($"📍 Radio button UI updated");
         }
 
         // ADD these helper methods at the end of UnitVerificationPage class
@@ -4408,35 +4441,173 @@ namespace PMEGP_Physical_V
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine("\n========== SAVE UNIT DETAIL DEBUG ==========");
+
                 var veriStatus = GetVerificationStatusCode();
-                //System.Diagnostics.Debug.WriteLine($"Saving Verification Status: {veriStatus}");
+                System.Diagnostics.Debug.WriteLine($"VeriStatus Code: {veriStatus}");
+
+                // Get editable field values from UI
+                var unitName = FindEntryValue("UnitName");
+                var unitAddr = FindEditorValue("UpdatedUnitAddress");
+                var unitEstDate = ConvertToApiDateFormat(FindEntryValue("UnitEstablishmentDate"));
+                var unitGSTNo = FindEntryValue("GSTRegistrationNumber");
+                var geoTagID = FindEntryValue("GeoTaggingID");
+                var longitude = FindEntryValue("Longitude");
+                var latitude = FindEntryValue("Latitude");
+
+                // Try to get UnitLocation from UI first (if editable), then fallback to API data
+                var unitLocation = FindEntryValue("UnitLocation");
+                if (string.IsNullOrEmpty(unitLocation))
+                {
+                    unitLocation = _apiData?.phyVerificationModel?.UnitLocation ?? "";
+                    System.Diagnostics.Debug.WriteLine($"⚠️ UnitLocation from UI is empty, using API data: {unitLocation}");
+                }
+
+                // Get read-only field values directly from API data
+                var unitUdyamRegNo = _apiData?.phyVerificationModel?.UnitUdyamRegNo ?? "";
+                var agencyCode = _apiData?.applicantData?.AgencyCode ?? "";
+                var agencyOfficeName = _apiData?.AgencyOffDetailModel?.AgencyOffName ?? "";
+
+                // Build product description from API data
+                var prodDescriptions = new List<string>();
+                if (!string.IsNullOrEmpty(_apiData?.applicantData?.ProdDescr))
+                    prodDescriptions.Add(_apiData.applicantData.ProdDescr);
+                if (!string.IsNullOrEmpty(_apiData?.applicantData?.ProdDescr2))
+                    prodDescriptions.Add(_apiData.applicantData.ProdDescr2);
+                var productDescription = string.Join(", ", prodDescriptions);
+
+                // Debug print all values
+                System.Diagnostics.Debug.WriteLine($"UnitName: '{unitName}'");
+                System.Diagnostics.Debug.WriteLine($"UnitAddr: '{unitAddr}'");
+                System.Diagnostics.Debug.WriteLine($"UnitEstDate: '{unitEstDate}'");
+                System.Diagnostics.Debug.WriteLine($"UnitGSTNo: '{unitGSTNo}'");
+                System.Diagnostics.Debug.WriteLine($"UnitUdyamRegNo: '{unitUdyamRegNo}'");
+                System.Diagnostics.Debug.WriteLine($"UnitLocation: '{unitLocation}'");
+                System.Diagnostics.Debug.WriteLine($"AgencyCode: '{agencyCode}'");
+                System.Diagnostics.Debug.WriteLine($"AgencyOfficeName: '{agencyOfficeName}'");
+                System.Diagnostics.Debug.WriteLine($"ProductDescription: '{productDescription}'");
+                System.Diagnostics.Debug.WriteLine($"GeoTagID: '{geoTagID}'");
+                System.Diagnostics.Debug.WriteLine($"Longitude: '{longitude}'");
+                System.Diagnostics.Debug.WriteLine($"Latitude: '{latitude}'");
+                System.Diagnostics.Debug.WriteLine($"VeriStatus: '{veriStatus}'");
+
+                // Additional debug - check _apiData structure
+                System.Diagnostics.Debug.WriteLine($"\n📊 API Data Check:");
+                System.Diagnostics.Debug.WriteLine($"phyVerificationModel != null: {_apiData?.phyVerificationModel != null}");
+                System.Diagnostics.Debug.WriteLine($"phyVerificationModel.UnitLocation: '{_apiData?.phyVerificationModel?.UnitLocation}'");
+                System.Diagnostics.Debug.WriteLine($"applicantData.UnitAddress: '{_apiData?.applicantData?.UnitAddress}'");
+                System.Diagnostics.Debug.WriteLine($"applicantData.UnitDistrict: '{_apiData?.applicantData?.UnitDistrict}'");
 
                 var payload = new
                 {
                     ApplID = _applId,
-                    UnitName = FindEntryValue("UnitName"),
-                    UnitAddr = FindEditorValue("UpdatedUnitAddress"),
+                    UnitName = unitName,
+                    UnitAddr = unitAddr,
                     VeriStatus = veriStatus,
-                    UnitArea = FindEntryValue("UnitArea") ?? "",
-                    UnitEstDate = ConvertToApiDateFormat(FindEntryValue("UnitEstablishmentDate")),
-                    UnitGSTNo = FindEntryValue("GSTRegistrationNumber"),
-                    UnitUdyamRegNo = FindEntryValue("UdyamRegistrationNumber"),
-                    UnitLocation = FindEntryValue("UnitLocation"),
-                    GeoTagID = FindEntryValue("GeoTaggingID"),
-                    Longitude = FindEntryValue("Longitude"),
-                    Latitude = FindEntryValue("Latitude")
+                    UnitArea = "",
+                    UnitEstDate = unitEstDate,
+                    UnitGSTNo = unitGSTNo,
+                    UnitUdyamRegNo = unitUdyamRegNo,
+                    UnitLocation = unitLocation,
+                    AgencyCode = agencyCode,
+                    AgencyOfficeName = agencyOfficeName,
+                    ProductDescription = productDescription,
+                    GeoTagID = geoTagID,
+                    Longitude = longitude,
+                    Latitude = latitude
                 };
 
+                var jsonPayload = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+                System.Diagnostics.Debug.WriteLine($"\n📤 Sending payload:\n{jsonPayload}");
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
+
+                // ✅ SAVE current state BEFORE any navigation
                 SaveCurrentStepState();
 
-                await CallSaveApiWithReload("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload, 2);
-
+                // Update previous status
                 _previousVerificationStatus = GetVerificationStatusText();
-                //System.Diagnostics.Debug.WriteLine($"Updated previous status to: {_previousVerificationStatus}");
+
+                System.Diagnostics.Debug.WriteLine("========== END DEBUG ==========\n");
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"❌ ERROR: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack Trace: {ex.StackTrace}");
                 await DisplayAlert("Error", $"Failed to save Unit Detail: {ex.Message}", "OK");
+            }
+        }
+
+
+        private void DebugPrintStackFields(StackLayout stack, ref int fieldCount, int depth)
+        {
+            string indent = new string(' ', depth * 2);
+
+            foreach (var item in stack.Children)
+            {
+                if (item is Grid grid)
+                {
+                    // Check for Border wrapper (Material Design style)
+                    var border = grid.Children.OfType<Border>().FirstOrDefault();
+                    if (border?.Content is Grid contentGrid)
+                    {
+                        var vertStack = contentGrid.Children.OfType<VerticalStackLayout>().FirstOrDefault();
+                        if (vertStack != null)
+                        {
+                            var label = vertStack.Children.OfType<Label>().FirstOrDefault();
+                            var entry = vertStack.Children.OfType<Entry>().FirstOrDefault();
+                            var editor = vertStack.Children.OfType<Editor>().FirstOrDefault();
+                            var picker = vertStack.Children.OfType<Picker>().FirstOrDefault();
+
+                            if (label != null)
+                            {
+                                fieldCount++;
+                                string fieldType = entry != null ? "Entry" :
+                                                 editor != null ? "Editor" :
+                                                 picker != null ? "Picker" : "Unknown";
+                                string value = entry?.Text ?? editor?.Text ?? picker?.SelectedItem?.ToString() ?? "empty";
+
+                                System.Diagnostics.Debug.WriteLine($"{indent}[{fieldCount}] Label: '{label.Text}' | Type: {fieldType} | Value: '{value}' | Normalized: '{NormalizeKey(label.Text)}'");
+                            }
+                        }
+                    }
+
+                    // Also check for Editor in Border with VerticalStackLayout
+                    if (border?.Content is VerticalStackLayout editorVertStack)
+                    {
+                        var label = editorVertStack.Children.OfType<Label>().FirstOrDefault();
+                        var editor = editorVertStack.Children.OfType<Editor>().FirstOrDefault();
+
+                        if (label != null && editor != null)
+                        {
+                            fieldCount++;
+                            System.Diagnostics.Debug.WriteLine($"{indent}[{fieldCount}] Label: '{label.Text}' | Type: Editor (Multiline) | Value: '{editor.Text}' | Normalized: '{NormalizeKey(label.Text)}'");
+                        }
+                    }
+                }
+
+                // Check for Switch
+                if (item is StackLayout possibleSwitchWrapper)
+                {
+                    var switchBorder = possibleSwitchWrapper.Children.OfType<Border>().FirstOrDefault();
+                    if (switchBorder?.Content is Grid switchGrid)
+                    {
+                        var label = switchGrid.Children.OfType<Label>().FirstOrDefault();
+                        var switchControl = switchGrid.Children.OfType<Switch>().FirstOrDefault();
+
+                        if (label != null && switchControl != null)
+                        {
+                            fieldCount++;
+                            System.Diagnostics.Debug.WriteLine($"{indent}[{fieldCount}] Label: '{label.Text}' | Type: Switch | Value: {switchControl.IsToggled} | Normalized: '{NormalizeKey(label.Text)}'");
+                        }
+                    }
+                }
+
+                // Recursively check nested StackLayouts
+                if (item is StackLayout nestedStack && item != stack)
+                {
+                    DebugPrintStackFields(nestedStack, ref fieldCount, depth + 1);
+                }
             }
         }
 
@@ -4444,17 +4615,41 @@ namespace PMEGP_Physical_V
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine("\n========== SAVE EDP TRAINING DEBUG ==========");
+
+                // Get editable field value from UI
+                var edpPeriod = FindEntryValue("EDPTrainingPeriod");
+
+                // Get read-only fields from API data
+                var edpCompleted = _apiData?.edpTrainingModel?.TrDateTo ?? "";
+                var instituteName = _apiData?.edpTrainingModel?.EDPTCName ?? "";
+                var instituteAddress = _apiData?.edpTrainingModel?.EDPAddress ?? "";
+
+                System.Diagnostics.Debug.WriteLine($"EDPPeriod: '{edpPeriod}'");
+                System.Diagnostics.Debug.WriteLine($"EDPCompleted: '{edpCompleted}'");
+                System.Diagnostics.Debug.WriteLine($"InstituteName: '{instituteName}'");
+                System.Diagnostics.Debug.WriteLine($"InstituteAddress: '{instituteAddress}'");
+
                 var payload = new
                 {
                     ApplID = _applId,
-                    EDPPeriod = FindEntryValue("EDPTrainingPeriod"),
-                    EDPInsAdress = FindEditorValue("AddressofInstitute")
+                    EDPPeriod = edpPeriod,
+                    TrDateTo = edpCompleted,
+                    EDPTCName = instituteName,
+                    EDPAddress = instituteAddress
                 };
+
+                var jsonPayload = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+                System.Diagnostics.Debug.WriteLine($"\n📤 Sending payload:\n{jsonPayload}");
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
                 SaveCurrentStepState();
-                await CallSaveApiWithReload("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload, 3);
+
+                System.Diagnostics.Debug.WriteLine("========== END DEBUG ==========\n");
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"❌ ERROR: {ex.Message}");
                 await DisplayAlert("Error", $"Failed to save EDP Training: {ex.Message}", "OK");
             }
         }
@@ -4469,6 +4664,25 @@ namespace PMEGP_Physical_V
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine("\n========== FINAL SUBMIT DEBUG ==========");
+
+                // Show confirmation dialog
+                bool confirm = await DisplayAlert(
+                    "Confirm Submission",
+                    "Are you sure you want to submit the verification? This action cannot be undone.",
+                    "Yes, Submit",
+                    "Cancel"
+                );
+
+                if (!confirm)
+                {
+                    System.Diagnostics.Debug.WriteLine("User cancelled final submission");
+                    return;
+                }
+
+                // Show loading indicator
+                ShowSaveLoadingOverlay();
+
                 // Step 1: Update isUnitVerDone = true via Insert_UVData_PV
                 var unitVerPayload = new
                 {
@@ -4479,7 +4693,7 @@ namespace PMEGP_Physical_V
                 var unitVerJson = JsonSerializer.Serialize(unitVerPayload);
                 var unitVerContent = new StringContent(unitVerJson, System.Text.Encoding.UTF8, "application/json");
 
-                //System.Diagnostics.Debug.WriteLine($"Updating Unit Verification Status: {unitVerJson}");
+                System.Diagnostics.Debug.WriteLine($"📤 Updating Unit Verification Status:\n{unitVerJson}");
 
                 var unitVerResponse = await _httpClient.PostAsync(
                     "https://115.124.125.153/MobileApp/Insert_UVData_PV",
@@ -4487,18 +4701,25 @@ namespace PMEGP_Physical_V
                 );
 
                 var unitVerResponseContent = await unitVerResponse.Content.ReadAsStringAsync();
-                //System.Diagnostics.Debug.WriteLine($"Unit Ver Response: {unitVerResponseContent}");
+                System.Diagnostics.Debug.WriteLine($"📥 Unit Ver Response: {unitVerResponseContent}");
 
                 if (!unitVerResponse.IsSuccessStatusCode)
                 {
                     throw new Exception($"Failed to update unit verification status: {unitVerResponseContent}");
                 }
 
-                // Step 2: Get enumerator remarks from verification section
-                string enumRemarks = FindEditorValue("EnumeratorRemark") ?? "Unit verification completed successfully";
-
-                // Step 3: Get verification status
+                // Step 2: Get verification status from radio buttons or dropdown
                 string verificationStatus = GetVerificationStatusText(); // "Working", "Defunct", or "Non-Traceable"
+
+                // Step 3: Get enumerator remarks from verification section
+                string enumRemarks = FindEditorValue("EnumeratorRemark");
+                if (string.IsNullOrEmpty(enumRemarks))
+                {
+                    enumRemarks = "Unit verification completed successfully";
+                }
+
+                System.Diagnostics.Debug.WriteLine($"Verification Status: '{verificationStatus}'");
+                System.Diagnostics.Debug.WriteLine($"Enumerator Remarks: '{enumRemarks}'");
 
                 // Step 4: Call PhyVerFinalSub_TP for final submission
                 var finalSubPayload = new
@@ -4508,10 +4729,10 @@ namespace PMEGP_Physical_V
                     enumRem = enumRemarks
                 };
 
-                var finalSubJson = JsonSerializer.Serialize(finalSubPayload);
+                var finalSubJson = JsonSerializer.Serialize(finalSubPayload, new JsonSerializerOptions { WriteIndented = true });
                 var finalSubContent = new StringContent(finalSubJson, System.Text.Encoding.UTF8, "application/json");
 
-                //System.Diagnostics.Debug.WriteLine($"Calling Final Submission: {finalSubJson}");
+                System.Diagnostics.Debug.WriteLine($"📤 Calling Final Submission:\n{finalSubJson}");
 
                 var finalSubResponse = await _httpClient.PostAsync(
                     "https://115.124.125.153/MobileApp/PhyVerFinalSub_TP",
@@ -4519,35 +4740,83 @@ namespace PMEGP_Physical_V
                 );
 
                 var finalSubResponseContent = await finalSubResponse.Content.ReadAsStringAsync();
-                //System.Diagnostics.Debug.WriteLine($"Final Submission Response: {finalSubResponseContent}");
+                System.Diagnostics.Debug.WriteLine($"📥 Final Submission Response: {finalSubResponseContent}");
+
+                HideSaveLoadingOverlay();
 
                 if (finalSubResponse.IsSuccessStatusCode)
                 {
+                    System.Diagnostics.Debug.WriteLine("✅ Final submission successful!");
+
                     await DisplayAlert("Success", "Unit verification completed and submitted successfully!", "OK");
-                    var detailsPage = Navigation.NavigationStack.OfType<DetailsPage>().FirstOrDefault();
-                    if (detailsPage != null)
-                    {
-                        // Use reflection to set private field
-                        var fieldInfo = typeof(DetailsPage).GetField("_shouldRefreshOnAppearing",
-                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        fieldInfo?.SetValue(detailsPage, true);
-                    }
-                    await Navigation.PopAsync();
+
+                    // Navigate back to DetailsPage and trigger refresh
+                    await NavigateBackAndRefreshDetailsPage();
                 }
                 else
                 {
                     throw new Exception($"Final submission failed: {finalSubResponseContent}");
                 }
+
+                System.Diagnostics.Debug.WriteLine("========== END DEBUG ==========\n");
             }
             catch (HttpRequestException ex)
             {
-                //System.Diagnostics.Debug.WriteLine($"Network Error: {ex.Message}");
+                HideSaveLoadingOverlay();
+                System.Diagnostics.Debug.WriteLine($"❌ Network Error: {ex.Message}");
                 await DisplayAlert("Network Error", $"Unable to connect to server: {ex.Message}", "OK");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Final Submit Error: {ex.Message}");
+                HideSaveLoadingOverlay();
+                System.Diagnostics.Debug.WriteLine($"❌ Final Submit Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack Trace: {ex.StackTrace}");
                 await DisplayAlert("Error", $"Final submission failed: {ex.Message}", "OK");
+            }
+        }
+
+        private async Task NavigateBackAndRefreshDetailsPage()
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("🔄 Navigating back to DetailsPage and refreshing...");
+
+                // Find DetailsPage in navigation stack
+                var detailsPage = Navigation.NavigationStack.OfType<DetailsPage>().FirstOrDefault();
+
+                if (detailsPage != null)
+                {
+                    System.Diagnostics.Debug.WriteLine("✅ Found DetailsPage in navigation stack");
+
+                    // Use reflection to set the private _shouldRefreshOnAppearing field
+                    var fieldInfo = typeof(DetailsPage).GetField("_shouldRefreshOnAppearing",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                    if (fieldInfo != null)
+                    {
+                        fieldInfo.SetValue(detailsPage, true);
+                        System.Diagnostics.Debug.WriteLine("✅ Set _shouldRefreshOnAppearing to true");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine("⚠️ Could not find _shouldRefreshOnAppearing field");
+                    }
+
+                    // Pop back to DetailsPage
+                    await Navigation.PopAsync();
+                    System.Diagnostics.Debug.WriteLine("✅ Navigated back to DetailsPage");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("⚠️ DetailsPage not found in navigation stack, doing normal pop");
+                    await Navigation.PopAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"❌ Navigation error: {ex.Message}");
+                // Fallback - just pop normally
+                await Navigation.PopAsync();
             }
         }
 
@@ -4555,20 +4824,50 @@ namespace PMEGP_Physical_V
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine("\n========== SAVE PRODUCT & SALES DEBUG ==========");
+
+                // Get editable field values from UI
+                var anlProdVal = FindEntryValue("AnnualProduction-Value");
+                var anlSaleVal = FindEntryValue("AnnualSales-Value");
+                var exportDetails = FindEntryValue("ExportDetail-value");
+                var exportDetCount = FindEntryValue("ExportDetail-CountryofExport");
+
+                // Get product details from Picker
+                var productDetails = FindPickerValue("ProductDetailsMainProduct");
+
+                // If picker value is empty or "--select", use API data
+                if (string.IsNullOrEmpty(productDetails) || productDetails == "--select")
+                {
+                    productDetails = _apiData?.applicantData?.ProdDescr2 ?? "";
+                }
+
+                System.Diagnostics.Debug.WriteLine($"AnlProdVal: '{anlProdVal}'");
+                System.Diagnostics.Debug.WriteLine($"AnlSaleVal: '{anlSaleVal}'");
+                System.Diagnostics.Debug.WriteLine($"ProductDetails: '{productDetails}'");
+                System.Diagnostics.Debug.WriteLine($"ExportDetails: '{exportDetails}'");
+                System.Diagnostics.Debug.WriteLine($"ExportDetCount: '{exportDetCount}'");
+
                 var payload = new
                 {
                     ApplID = _applId,
-                    AnlProdVal = FindEntryValue("AnnualProduction-Value"),
-                    AnlSaleVal = FindEntryValue("AnnualSales-Value"),
-                    ProdDetails = FindPickerValue("ProductDetails"),
-                    ExportDetails = FindEntryValue("ExportDetail-value"),
-                    ExportDetCount = FindEntryValue("ExportDetail-CountryofExport")
+                    AnlProdVal = string.IsNullOrEmpty(anlProdVal) ? 0 : decimal.Parse(anlProdVal),
+                    AnlSaleVal = string.IsNullOrEmpty(anlSaleVal) ? 0 : decimal.Parse(anlSaleVal),
+                    ProdDetails = productDetails,
+                    ExportDetails = string.IsNullOrEmpty(exportDetails) ? 0 : decimal.Parse(exportDetails),
+                    ExportDetCount = exportDetCount
                 };
+
+                var jsonPayload = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+                System.Diagnostics.Debug.WriteLine($"\n📤 Sending payload:\n{jsonPayload}");
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
                 SaveCurrentStepState();
-                await CallSaveApiWithReload("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload, 6);
+
+                System.Diagnostics.Debug.WriteLine("========== END DEBUG ==========\n");
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"❌ ERROR: {ex.Message}");
                 await DisplayAlert("Error", $"Failed to save Product & Sales: {ex.Message}", "OK");
             }
         }
@@ -4577,31 +4876,78 @@ namespace PMEGP_Physical_V
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine("\n========== SAVE EMPLOYMENT DATA ==========");
+
+                // Collect values from form
+                var empMale = FindEntryValue("Male");
+                var empFemale = FindEntryValue("Female");
+                var empTransgender = FindEntryValue("Transgender");
+                var empGEN = FindEntryValue("General");
+                var empSC = FindEntryValue("SC");
+                var empST = FindEntryValue("ST");
+                var empOBC = FindEntryValue("OBC");
+                var empMinority = FindEntryValue("Minority");
+                var fullTimeEmp = FindEntryValue("Full-TimeEmployees");
+                var partTimeEmp = FindEntryValue("Part-TimeEmployees");
+                var seasonalEmp = FindEntryValue("SeasonalEmployees");
+                var totalEMP = FindEntryValue("TotalNumberOfEmployees");
+                var avgWgPaidPerMonth = FindEntryValue("AverageWagespaidperemployeepermonth");
+
+                // Construct payload exactly as backend expects
                 var payload = new
                 {
-                    ApplID = _applId,
-                    EmpMale = FindEntryValue("Male"),
-                    EmpFemale = FindEntryValue("Female"),
-                    EmpTransgender = FindEntryValue("Transgender"),
-                    EmpGEN = FindEntryValue("General"),
-                    EmpSC = FindEntryValue("SC"),
-                    EmpST = FindEntryValue("ST"),
-                    EmpOBC = FindEntryValue("OBC"),
-                    EmpMinority = FindEntryValue("Minority"),
-                    FullTime_Emp = FindEntryValue("Full-TimeEmployees"),
-                    PartTime_Emp = FindEntryValue("Part-TimeEmployees"),
-                    Seasonal_Emp = FindEntryValue("SeasonalEmployees"),
-                    TotalEMP = FindEntryValue("TotalNumberOfEmployees"),
-                    AvgWgPaidPerMonth = FindEntryValue("AverageWagespaidperemployeepermonth")
+                    ApplID = _applId,                                // numeric
+                    EmpMale = empMale ?? "0",
+                    EmpFemale = empFemale ?? "0",
+                    EmpTransgender = empTransgender ?? "0",
+                    EmpGEN = empGEN ?? "0",
+                    EmpSC = empSC ?? "0",
+                    EmpST = empST ?? "0",
+                    EmpOBC = empOBC ?? "0",
+                    EmpMinority = empMinority ?? "0",
+                    FullTime_Emp = fullTimeEmp ?? "0",
+                    PartTime_Emp = partTimeEmp ?? "0",
+                    Seasonal_Emp = seasonalEmp ?? "0",
+                    TotalEMP = string.IsNullOrWhiteSpace(totalEMP) ? 0 : int.Parse(totalEMP),
+                    AvgWgPaidPerMonth = avgWgPaidPerMonth ?? "0"
                 };
+
+                var jsonPayload = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+                System.Diagnostics.Debug.WriteLine($"\n📤 Sending Employment Payload:\n{jsonPayload}");
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
                 SaveCurrentStepState();
-                await CallSaveApiWithReload("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload, 7);
+
+                // ✅ Update local model too
+                if (_apiData?.phyVerificationModel != null)
+                {
+                    _apiData.phyVerificationModel.EmpMale = SafeParseInt(empMale);
+                    _apiData.phyVerificationModel.EmpFemale = SafeParseInt(empFemale);
+                    _apiData.phyVerificationModel.EmpTransgender = SafeParseInt(empTransgender);
+                    _apiData.phyVerificationModel.FullTime_Emp = fullTimeEmp;
+                    _apiData.phyVerificationModel.PartTime_Emp = partTimeEmp;
+                    _apiData.phyVerificationModel.Seasonal_Emp = seasonalEmp;
+                    _apiData.phyVerificationModel.TotalEMP = SafeParseInt(totalEMP);
+                    _apiData.phyVerificationModel.AvgWgPaidPerMonth = SafeParseDecimal(avgWgPaidPerMonth);
+                }
+
+                await DisplayAlert("Success", "Employment details saved successfully.", "OK");
+                System.Diagnostics.Debug.WriteLine("✅ Employment details saved successfully.\n");
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"❌ ERROR: {ex.Message}");
                 await DisplayAlert("Error", $"Failed to save Employment: {ex.Message}", "OK");
             }
         }
+
+        private int SafeParseInt(string s) => int.TryParse(s, out var v) ? v : 0;
+        private decimal SafeParseDecimal(string s) => decimal.TryParse(s, out var v) ? v : 0;
+
+
+        private int ParseInt(string s) => int.TryParse(s, out var v) ? v : 0;
+        private decimal ParseDecimal(string s) => decimal.TryParse(s, out var v) ? v : 0;
+
 
         private async Task SaveDocumentData()
         {
@@ -4622,20 +4968,60 @@ namespace PMEGP_Physical_V
         {
             try
             {
+                System.Diagnostics.Debug.WriteLine("\n========== SAVE VERIFICATION DEBUG ==========");
+
+                // Get verification status from dropdown
+                var verStatusDropdown = FindPickerValue("VerificationStatus");
+                System.Diagnostics.Debug.WriteLine($"Verification Status Dropdown: '{verStatusDropdown}'");
+
+                // Convert dropdown value to status code
+                string veriStatusCode = "";
+                if (verStatusDropdown == "Completed")
+                {
+                    veriStatusCode = "WR"; // Working
+                }
+                else if (verStatusDropdown == "Pending")
+                {
+                    veriStatusCode = "PD"; // Pending
+                }
+                else
+                {
+                    // Fallback to radio button selection
+                    veriStatusCode = GetVerificationStatusCode();
+                }
+
+                var verDate = ConvertToApiDateFormat(FindEntryValue("VerificationDate"));
+                var verAgencyName = FindEntryValue("VerificationAgencyName");
+                var enumRem = FindEditorValue("EnumeratorRemark");
+                var isSignBoardIns = FindSwitchValue("ProminentSignBoardinstalled");
+
+                System.Diagnostics.Debug.WriteLine($"VeriStatusCode: '{veriStatusCode}'");
+                System.Diagnostics.Debug.WriteLine($"VerDate: '{verDate}'");
+                System.Diagnostics.Debug.WriteLine($"VerAgencyName: '{verAgencyName}'");
+                System.Diagnostics.Debug.WriteLine($"EnumRem: '{enumRem}'");
+                System.Diagnostics.Debug.WriteLine($"IsSignBoardIns: '{isSignBoardIns}'");
+
                 var payload = new
                 {
                     ApplID = _applId,
-                    VerStatus = FindPickerValue("VerificationStatus") == "Completed" ? "1" : "2",
-                    VerDate = ConvertToApiDateFormat(FindEntryValue("VerificationDate")),
-                    VerAgencyName = FindEntryValue("VerificationAgencyName"),
-                    EnumRem = FindEditorValue("EnumeratorRemark"),
-                    IsSignBoardIns = FindSwitchValue("ProminentSignBoardinstalled") ? 1 : 0
+                    VeriStatus = veriStatusCode,
+                    VerDate = verDate,
+                    VerAgencyName = verAgencyName,
+                    EnumRem = enumRem,
+                    IsSignBoardIns = isSignBoardIns ? 1 : 0
                 };
+
+                var jsonPayload = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
+                System.Diagnostics.Debug.WriteLine($"\n📤 Sending payload:\n{jsonPayload}");
+
+                await CallSaveApi("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload);
                 SaveCurrentStepState();
-                await CallSaveApiWithReload("https://115.124.125.153/MobileApp/Insert_UVData_PV", payload, 9);
+
+                System.Diagnostics.Debug.WriteLine("========== END DEBUG ==========\n");
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"❌ ERROR: {ex.Message}");
                 await DisplayAlert("Error", $"Failed to save Verification: {ex.Message}", "OK");
             }
         }
@@ -4751,48 +5137,154 @@ namespace PMEGP_Physical_V
 
         private string FindEntryValue(string placeholder)
         {
-            // Search through ContentContainer for Entry with matching text
+            var normalizedPlaceholder = NormalizeKey(placeholder);
+            System.Diagnostics.Debug.WriteLine($"  🔍 FindEntryValue searching for: '{placeholder}' → Normalized: '{normalizedPlaceholder}'");
+
             foreach (var child in ContentContainer.Children)
             {
                 if (child is StackLayout stack)
                 {
-                    foreach (var item in stack.Children)
+                    var result = FindEntryInStack(stack, normalizedPlaceholder);
+                    if (!string.IsNullOrEmpty(result))
                     {
-                        if (item is Grid grid)
+                        System.Diagnostics.Debug.WriteLine($"  ✅ Found value: '{result}'");
+                        return result;
+                    }
+                }
+            }
+
+            // Check formState
+            if (_formState.ContainsKey(normalizedPlaceholder))
+            {
+                var stateValue = _formState[normalizedPlaceholder]?.ToString() ?? "";
+                System.Diagnostics.Debug.WriteLine($"  ✅ Found in state: '{stateValue}'");
+                return stateValue;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"  ❌ NOT FOUND");
+            return "";
+        }
+
+        private string FindEntryInStack(StackLayout stack, string normalizedPlaceholder)
+        {
+            foreach (var item in stack.Children)
+            {
+                if (item is Grid grid)
+                {
+                    var border = grid.Children.OfType<Border>().FirstOrDefault();
+                    if (border?.Content is Grid contentGrid)
+                    {
+                        var vertStack = contentGrid.Children.OfType<VerticalStackLayout>().FirstOrDefault();
+                        if (vertStack != null)
                         {
-                            var label = grid.Children.OfType<Label>().FirstOrDefault(l => l.Text?.Replace("*", "").Replace(" ", "").Replace(":", "").Replace("-", "") == placeholder.Replace("*", "").Replace(" ", "").Replace(":", "").Replace("-", ""));
-                            if (label != null)
+                            var label = vertStack.Children.OfType<Label>().FirstOrDefault();
+                            var entry = vertStack.Children.OfType<Entry>().FirstOrDefault();
+
+                            if (label != null && entry != null)
                             {
-                                var entry = grid.Children.OfType<Entry>().FirstOrDefault();
-                                return entry?.Text ?? "";
+                                var normalizedLabel = NormalizeKey(label.Text);
+                                if (normalizedLabel == normalizedPlaceholder)
+                                {
+                                    return entry.Text ?? "";
+                                }
                             }
                         }
                     }
                 }
+
+                if (item is StackLayout nestedStack)
+                {
+                    var result = FindEntryInStack(nestedStack, normalizedPlaceholder);
+                    if (!string.IsNullOrEmpty(result))
+                        return result;
+                }
             }
+
             return "";
         }
 
         private string FindEditorValue(string placeholder)
         {
+            var normalizedPlaceholder = NormalizeKey(placeholder);
+            System.Diagnostics.Debug.WriteLine($"  🔍 FindEditorValue searching for: '{placeholder}' → Normalized: '{normalizedPlaceholder}'");
+
             foreach (var child in ContentContainer.Children)
             {
                 if (child is StackLayout stack)
                 {
-                    foreach (var item in stack.Children)
+                    var result = FindEditorInStack(stack, normalizedPlaceholder);
+                    if (!string.IsNullOrEmpty(result))
                     {
-                        if (item is Grid grid)
+                        System.Diagnostics.Debug.WriteLine($"  ✅ Found value: '{result}'");
+                        return result;
+                    }
+                }
+            }
+
+            if (_formState.ContainsKey(normalizedPlaceholder))
+            {
+                var stateValue = _formState[normalizedPlaceholder]?.ToString() ?? "";
+                System.Diagnostics.Debug.WriteLine($"  ✅ Found in state: '{stateValue}'");
+                return stateValue;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"  ❌ NOT FOUND");
+            return "";
+        }
+
+        private string FindEditorInStack(StackLayout stack, string normalizedPlaceholder)
+        {
+            foreach (var item in stack.Children)
+            {
+                if (item is Grid grid)
+                {
+                    var border = grid.Children.OfType<Border>().FirstOrDefault();
+
+                    // Check for VerticalStackLayout with Editor
+                    if (border?.Content is VerticalStackLayout vertStack)
+                    {
+                        var label = vertStack.Children.OfType<Label>().FirstOrDefault();
+                        var editor = vertStack.Children.OfType<Editor>().FirstOrDefault();
+
+                        if (label != null && editor != null)
                         {
-                            var label = grid.Children.OfType<Label>().FirstOrDefault(l => l.Text?.Replace("*", "").Replace(" ", "").Replace(":", "") == placeholder.Replace("*", "").Replace(" ", "").Replace(":", ""));
-                            if (label != null)
+                            var normalizedLabel = NormalizeKey(label.Text);
+                            if (normalizedLabel == normalizedPlaceholder)
                             {
-                                var editor = grid.Children.OfType<Editor>().FirstOrDefault();
-                                return editor?.Text ?? "";
+                                return editor.Text ?? "";
+                            }
+                        }
+                    }
+
+                    // Also check Grid with VerticalStackLayout
+                    if (border?.Content is Grid contentGrid)
+                    {
+                        var verticalStack = contentGrid.Children.OfType<VerticalStackLayout>().FirstOrDefault();
+                        if (verticalStack != null)
+                        {
+                            var label = verticalStack.Children.OfType<Label>().FirstOrDefault();
+                            var editor = verticalStack.Children.OfType<Editor>().FirstOrDefault();
+
+                            if (label != null && editor != null)
+                            {
+                                var normalizedLabel = NormalizeKey(label.Text);
+                                if (normalizedLabel == normalizedPlaceholder)
+                                {
+                                    return editor.Text ?? "";
+                                }
                             }
                         }
                     }
                 }
+
+                if (item is StackLayout nestedStack)
+                {
+                    var result = FindEditorInStack(nestedStack, normalizedPlaceholder);
+                    if (!string.IsNullOrEmpty(result))
+                        return result;
+                }
             }
+
             return "";
         }
 
@@ -4810,23 +5302,91 @@ namespace PMEGP_Physical_V
 
         private string FindPickerValue(string placeholder)
         {
+            var normalizedPlaceholder = NormalizeKey(placeholder);
+            System.Diagnostics.Debug.WriteLine($"  🔍 FindPickerValue searching for: '{placeholder}' → Normalized: '{normalizedPlaceholder}'");
+
             foreach (var child in ContentContainer.Children)
             {
                 if (child is StackLayout stack)
                 {
-                    foreach (var item in stack.Children)
+                    var result = FindPickerInStack(stack, normalizedPlaceholder);
+                    if (!string.IsNullOrEmpty(result))
                     {
-                        if (item is Grid grid)
+                        System.Diagnostics.Debug.WriteLine($"  ✅ Found picker value: '{result}'");
+                        return result;
+                    }
+                }
+            }
+
+            // Check formState
+            if (_formState.ContainsKey(normalizedPlaceholder))
+            {
+                var stateValue = _formState[normalizedPlaceholder]?.ToString() ?? "";
+                System.Diagnostics.Debug.WriteLine($"  ✅ Found in state: '{stateValue}'");
+                return stateValue;
+            }
+
+            // Check with dropdown suffix
+            var dropdownKey = normalizedPlaceholder + "_Dropdown";
+            if (_formState.ContainsKey(dropdownKey))
+            {
+                var stateValue = _formState[dropdownKey]?.ToString() ?? "";
+                System.Diagnostics.Debug.WriteLine($"  ✅ Found in state with dropdown suffix: '{stateValue}'");
+                return stateValue;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"  ❌ NOT FOUND");
+            return "";
+        }
+
+        private string FindPickerInStack(StackLayout stack, string normalizedPlaceholder)
+        {
+            foreach (var item in stack.Children)
+            {
+                if (item is Grid grid)
+                {
+                    var border = grid.Children.OfType<Border>().FirstOrDefault();
+                    if (border?.Content is Grid contentGrid)
+                    {
+                        var vertStack = contentGrid.Children.OfType<VerticalStackLayout>().FirstOrDefault();
+                        if (vertStack != null)
                         {
-                            var picker = grid.Children.OfType<Picker>().FirstOrDefault(p => p.Title?.Replace("*", "") == placeholder.Replace("*", ""));
-                            if (picker != null && picker.SelectedItem != null)
+                            var label = vertStack.Children.OfType<Label>().FirstOrDefault();
+                            var picker = vertStack.Children.OfType<Picker>().FirstOrDefault();
+
+                            if (label != null && picker != null)
                             {
-                                return picker.SelectedItem.ToString();
+                                var normalizedLabel = NormalizeKey(label.Text);
+                                if (normalizedLabel == normalizedPlaceholder && picker.SelectedItem != null)
+                                {
+                                    return picker.SelectedItem.ToString();
+                                }
                             }
                         }
                     }
                 }
+
+                // Check for standalone Picker
+                if (item is Picker standalonePicker && standalonePicker.SelectedItem != null)
+                {
+                    string key = !string.IsNullOrEmpty(standalonePicker.Title)
+                        ? NormalizeKey(standalonePicker.Title)
+                        : normalizedPlaceholder;
+
+                    if (key == normalizedPlaceholder)
+                    {
+                        return standalonePicker.SelectedItem.ToString();
+                    }
+                }
+
+                if (item is StackLayout nestedStack)
+                {
+                    var result = FindPickerInStack(nestedStack, normalizedPlaceholder);
+                    if (!string.IsNullOrEmpty(result))
+                        return result;
+                }
             }
+
             return "";
         }
 
@@ -4855,34 +5415,71 @@ namespace PMEGP_Physical_V
 
         private string GetVerificationStatusCode()
         {
-            // Find selected radio button
+            // First, try to get from form state (saved selection)
+            if (_formState.ContainsKey("VerificationStatus_Selected"))
+            {
+                string savedStatus = _formState["VerificationStatus_Selected"]?.ToString();
+                System.Diagnostics.Debug.WriteLine($"📍 Found saved status in state: {savedStatus}");
+
+                return savedStatus switch
+                {
+                    "Working" => "WR",
+                    "Defunct" => "DF",
+                    "Non-Traceable" => "NT",
+                    _ => "WR"
+                };
+            }
+
+            // Fallback: search in UI
+            System.Diagnostics.Debug.WriteLine($"📍 Searching for radio buttons in UI...");
             foreach (var child in ContentContainer.Children)
             {
                 if (child is StackLayout stack)
                 {
-                    foreach (var item in stack.Children)
+                    var code = SearchRadioButtonsInStack(stack);
+                    if (!string.IsNullOrEmpty(code))
                     {
-                        if (item is StackLayout radioGroup && radioGroup.Orientation == StackOrientation.Horizontal)
-                        {
-                            foreach (var radioContainer in radioGroup.Children.OfType<StackLayout>())
-                            {
-                                var radioFrame = radioContainer.Children.FirstOrDefault() as Frame;
-                                if (radioFrame != null && radioFrame.BackgroundColor == Color.FromArgb("#4CAF50"))
-                                {
-                                    return radioFrame.ClassId switch
-                                    {
-                                        "Working" => "WR",
-                                        "Defunct" => "DF",
-                                        "Non-Traceable" => "NT",
-                                        _ => "WR"
-                                    };
-                                }
-                            }
-                        }
+                        System.Diagnostics.Debug.WriteLine($"📍 Found status in UI: {code}");
+                        return code;
                     }
                 }
             }
-            return "WR";
+
+            System.Diagnostics.Debug.WriteLine($"📍 No status found, defaulting to WR");
+            return "WR"; // Default to Working
+        }
+
+        private string SearchRadioButtonsInStack(StackLayout stack)
+        {
+            foreach (var item in stack.Children)
+            {
+                if (item is StackLayout radioGroup && radioGroup.Orientation == StackOrientation.Horizontal)
+                {
+                    foreach (var radioContainer in radioGroup.Children.OfType<StackLayout>())
+                    {
+                        var radioFrame = radioContainer.Children.FirstOrDefault() as Frame;
+                        if (radioFrame != null && radioFrame.BackgroundColor == Color.FromArgb("#4CAF50"))
+                        {
+                            return radioFrame.ClassId switch
+                            {
+                                "Working" => "WR",
+                                "Defunct" => "DF",
+                                "Non-Traceable" => "NT",
+                                _ => "WR"
+                            };
+                        }
+                    }
+                }
+
+                if (item is StackLayout nestedStack)
+                {
+                    var code = SearchRadioButtonsInStack(nestedStack);
+                    if (!string.IsNullOrEmpty(code))
+                        return code;
+                }
+            }
+
+            return "";
         }
 
         private string ConvertToApiDateFormat(string dateText)
