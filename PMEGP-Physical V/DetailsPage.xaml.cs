@@ -458,6 +458,9 @@ namespace PMEGP_Physical_V
         private bool _shouldRefreshOnAppearing = false;
         private string _userName = "Test";
         private string _status = "PendingApplications";
+        private bool _hasLoadedOnce = false;
+        private DateTime _lastLoadedAt = DateTime.MinValue;
+        private readonly TimeSpan _refreshStaleThreshold = TimeSpan.FromSeconds(10);
 
         public DetailsPage(DashboardPage.DetailsPageRequest request)
         {
@@ -508,23 +511,87 @@ namespace PMEGP_Physical_V
         {
             base.OnAppearing();
 
+            // First-time load
+            if (!_hasLoadedOnce)
+            {
+                _hasLoadedOnce = true;
+                await RefreshDataAsync();
+                _lastLoadedAt = DateTime.UtcNow;
+                return;
+            }
+
+            // Refresh when coming back from subpages
             if (_shouldRefreshOnAppearing)
             {
                 _shouldRefreshOnAppearing = false;
                 await RefreshDataAsync();
+                _lastLoadedAt = DateTime.UtcNow;
+                return;
+            }
+
+            // Auto-refresh if data older than threshold
+            if ((DateTime.UtcNow - _lastLoadedAt) > _refreshStaleThreshold)
+            {
+                await RefreshDataAsync();
+                _lastLoadedAt = DateTime.UtcNow;
             }
         }
 
+        protected override void OnDisappearing()
+        {
+            base.OnDisappearing();
+
+            // Dispose only when actually popped from navigation
+            try
+            {
+                if (Navigation != null && !Navigation.NavigationStack.Contains(this))
+                {
+                    _viewModel?.Dispose();
+                }
+            }
+            catch
+            {
+                // ignore navigation errors
+            }
+        }
+
+
         private async Task RefreshDataAsync()
         {
+            try
+            {
+                ShowLoader();
+                await _viewModel.LoadDataAsync(_userName, _status);
+
+                if (!_viewModel.IsLoading && string.IsNullOrEmpty(_viewModel.ErrorMessage))
+                {
+                    DisplayApplicants(_viewModel.FilteredApplicants.ToList());
+                    _lastLoadedAt = DateTime.UtcNow;
+                }
+                else if (!string.IsNullOrEmpty(_viewModel.ErrorMessage))
+                {
+                    await DisplayAlert("Error", _viewModel.ErrorMessage, "OK");
+                }
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Failed to load data: {ex.Message}", "OK");
+            }
+            finally
+            {
+                HideLoader();
+            }
+        }
+
+        public async Task RefreshDataExternallyAsync()
+        {
+            System.Diagnostics.Debug.WriteLine($"🔄 External refresh triggered with status: {_status}");
             ShowLoader();
             await _viewModel.LoadDataAsync(_userName, _status);
-
             if (!_viewModel.IsLoading && string.IsNullOrEmpty(_viewModel.ErrorMessage))
             {
                 DisplayApplicants(_viewModel.FilteredApplicants.ToList());
             }
-
             HideLoader();
         }
 
@@ -1034,13 +1101,20 @@ namespace PMEGP_Physical_V
         }
 
         // ADDED: Navigation method for briefcase button tap
+        // EXISTING METHOD - Update to pass status
         private async Task OnBriefcaseButtonTapped(ApplicantViewModel applicant)
         {
             try
             {
-                // Extract badge status and pass to UnitVerificationPage
+                _shouldRefreshOnAppearing = true;
+                // ✅ Pass the current page's status to UnitVerificationPage
                 string badgeStatus = applicant.Status?.Trim() ?? "Pending";
-                var unitVerificationPage = new UnitVerificationPage(applicant.ApplID, badgeStatus, applicant.IsUnitVerDone);
+                var unitVerificationPage = new UnitVerificationPage(
+                    applicant.ApplID,
+                    _status,
+                    badgeStatus,
+                    applicant.IsUnitVerDone
+                );
                 await Navigation.PushAsync(unitVerificationPage);
             }
             catch (Exception ex)
@@ -1253,10 +1327,10 @@ namespace PMEGP_Physical_V
             return base.OnBackButtonPressed();
         }
 
-        protected override void OnDisappearing()
-        {
-            base.OnDisappearing();
-            _viewModel?.Dispose();
-        }
+        //protected override void OnDisappearing()
+        //{
+        //    base.OnDisappearing();
+        //    _viewModel?.Dispose();
+        //}
     }
 }

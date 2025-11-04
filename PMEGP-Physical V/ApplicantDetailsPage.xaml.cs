@@ -604,7 +604,7 @@ namespace PMEGP_Physical_V
             try
             {
                 // Navigate to UnitVerificationPage and pass the applID
-                var unitVerificationPage = new UnitVerificationPage(_applID);
+                var unitVerificationPage = new UnitVerificationPage(_applID, "Pending", "Completed", false);
                 await Navigation.PushAsync(unitVerificationPage);
             }
             catch (Exception ex)

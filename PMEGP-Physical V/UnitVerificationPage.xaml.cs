@@ -291,6 +291,7 @@ namespace PMEGP_Physical_V
         private readonly string _badgeStatus;
         private bool _isEditable = false;
         private readonly bool _isUnitVerDone;
+        private readonly string _detailsPageStatus;
         private Dictionary<int, Dictionary<string, object>> _stepData = new Dictionary<int, Dictionary<string, object>>();
         private string _previousVerificationStatus = "WR"; // Track previous status
         private Dictionary<string, object> _formState = new Dictionary<string, object>();
@@ -310,12 +311,13 @@ namespace PMEGP_Physical_V
         };
 
         // Modified constructor to accept ApplID
-        public UnitVerificationPage(int applId, string badgeStatus = "Completed", bool isUnitVerDone = false)
+        public UnitVerificationPage(int applId, string detailsPageStatus, string badgeStatus = "Completed", bool isUnitVerDone = false)
         {
             InitializeComponent();
             _applId = applId;
             _badgeStatus = badgeStatus?.Trim() ?? "Completed";
             _isUnitVerDone = isUnitVerDone;
+            _detailsPageStatus = detailsPageStatus;
 
             _isEditable = !string.Equals(_badgeStatus, "Completed", StringComparison.OrdinalIgnoreCase);
 
@@ -4665,8 +4667,8 @@ namespace PMEGP_Physical_V
             try
             {
                 System.Diagnostics.Debug.WriteLine("\n========== FINAL SUBMIT DEBUG ==========");
+                System.Diagnostics.Debug.WriteLine($"📍 Current DetailsPage Status: {_detailsPageStatus}");
 
-                // Show confirmation dialog
                 bool confirm = await DisplayAlert(
                     "Confirm Submission",
                     "Are you sure you want to submit the verification? This action cannot be undone.",
@@ -4680,10 +4682,9 @@ namespace PMEGP_Physical_V
                     return;
                 }
 
-                // Show loading indicator
                 ShowSaveLoadingOverlay();
 
-                // Step 1: Update isUnitVerDone = true via Insert_UVData_PV
+                // Step 1: Update isUnitVerDone = true
                 var unitVerPayload = new
                 {
                     ApplID = _applId,
@@ -4708,10 +4709,8 @@ namespace PMEGP_Physical_V
                     throw new Exception($"Failed to update unit verification status: {unitVerResponseContent}");
                 }
 
-                // Step 2: Get verification status from radio buttons or dropdown
-                string verificationStatus = GetVerificationStatusText(); // "Working", "Defunct", or "Non-Traceable"
-
-                // Step 3: Get enumerator remarks from verification section
+                // Step 2: Get verification details
+                string verificationStatus = GetVerificationStatusText();
                 string enumRemarks = FindEditorValue("EnumeratorRemark");
                 if (string.IsNullOrEmpty(enumRemarks))
                 {
@@ -4721,7 +4720,7 @@ namespace PMEGP_Physical_V
                 System.Diagnostics.Debug.WriteLine($"Verification Status: '{verificationStatus}'");
                 System.Diagnostics.Debug.WriteLine($"Enumerator Remarks: '{enumRemarks}'");
 
-                // Step 4: Call PhyVerFinalSub_TP for final submission
+                // Step 3: Final submission
                 var finalSubPayload = new
                 {
                     ApplID = _applId,
@@ -4750,8 +4749,9 @@ namespace PMEGP_Physical_V
 
                     await DisplayAlert("Success", "Unit verification completed and submitted successfully!", "OK");
 
-                    // Navigate back to DetailsPage and trigger refresh
-                    await NavigateBackAndRefreshDetailsPage();
+                    // ✅ Navigate back with the stored status
+                    System.Diagnostics.Debug.WriteLine($"📍 Navigating back with status: {_detailsPageStatus}");
+                    await NavigateBackToDetailsPageWithRefresh();
                 }
                 else
                 {
@@ -4760,26 +4760,21 @@ namespace PMEGP_Physical_V
 
                 System.Diagnostics.Debug.WriteLine("========== END DEBUG ==========\n");
             }
-            catch (HttpRequestException ex)
-            {
-                HideSaveLoadingOverlay();
-                System.Diagnostics.Debug.WriteLine($"❌ Network Error: {ex.Message}");
-                await DisplayAlert("Network Error", $"Unable to connect to server: {ex.Message}", "OK");
-            }
             catch (Exception ex)
             {
                 HideSaveLoadingOverlay();
                 System.Diagnostics.Debug.WriteLine($"❌ Final Submit Error: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Stack Trace: {ex.StackTrace}");
                 await DisplayAlert("Error", $"Final submission failed: {ex.Message}", "OK");
             }
         }
 
-        private async Task NavigateBackAndRefreshDetailsPage()
+        // ✅ Navigate back method
+        private async Task NavigateBackToDetailsPageWithRefresh()
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("🔄 Navigating back to DetailsPage and refreshing...");
+                System.Diagnostics.Debug.WriteLine($"🔄 Navigating back to DetailsPage");
+                System.Diagnostics.Debug.WriteLine($"   Status to be used for refresh: {_detailsPageStatus}");
 
                 // Find DetailsPage in navigation stack
                 var detailsPage = Navigation.NavigationStack.OfType<DetailsPage>().FirstOrDefault();
@@ -4788,19 +4783,9 @@ namespace PMEGP_Physical_V
                 {
                     System.Diagnostics.Debug.WriteLine("✅ Found DetailsPage in navigation stack");
 
-                    // Use reflection to set the private _shouldRefreshOnAppearing field
-                    var fieldInfo = typeof(DetailsPage).GetField("_shouldRefreshOnAppearing",
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-                    if (fieldInfo != null)
-                    {
-                        fieldInfo.SetValue(detailsPage, true);
-                        System.Diagnostics.Debug.WriteLine("✅ Set _shouldRefreshOnAppearing to true");
-                    }
-                    else
-                    {
-                        System.Diagnostics.Debug.WriteLine("⚠️ Could not find _shouldRefreshOnAppearing field");
-                    }
+                    // ✅ Call public refresh method directly (no reflection needed)
+                    await detailsPage.RefreshDataExternallyAsync();
+                    System.Diagnostics.Debug.WriteLine("✅ Refresh method called successfully");
 
                     // Pop back to DetailsPage
                     await Navigation.PopAsync();
@@ -4808,14 +4793,13 @@ namespace PMEGP_Physical_V
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine("⚠️ DetailsPage not found in navigation stack, doing normal pop");
+                    System.Diagnostics.Debug.WriteLine("⚠️ DetailsPage not found in navigation stack");
                     await Navigation.PopAsync();
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"❌ Navigation error: {ex.Message}");
-                // Fallback - just pop normally
                 await Navigation.PopAsync();
             }
         }
