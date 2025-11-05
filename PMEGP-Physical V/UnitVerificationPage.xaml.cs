@@ -91,6 +91,9 @@ namespace PMEGP_Physical_V
         [JsonPropertyName("ProdDescr2")]
         public string ProdDescr2 { get; set; }
 
+        [JsonPropertyName("ProdDescr3")]
+        public string ProdDescr3 { get; set; }
+
         [JsonPropertyName("FinBank1")]
         public string FinBank1 { get; set; }
 
@@ -295,6 +298,8 @@ namespace PMEGP_Physical_V
         private Dictionary<int, Dictionary<string, object>> _stepData = new Dictionary<int, Dictionary<string, object>>();
         private string _previousVerificationStatus = "WR"; // Track previous status
         private Dictionary<string, object> _formState = new Dictionary<string, object>();
+        private Dictionary<string, string> _productActivityMap = new Dictionary<string, string>();
+        private string _selectedProductCode = "";
 
         private readonly Dictionary<int, StepInfo> _stepInfos = new Dictionary<int, StepInfo>
         {
@@ -363,6 +368,8 @@ namespace PMEGP_Physical_V
                     _imageData = imageData;
                 }
 
+                BuildProductActivityMapping();
+
                 // Load the first step content after data is loaded
                 LoadStepContent(_currentStep);
             }
@@ -370,6 +377,40 @@ namespace PMEGP_Physical_V
             {
                 await DisplayAlert("Error", $"Failed to load data: {ex.Message}", "OK");
             }
+        }
+
+        private void BuildProductActivityMapping()
+        {
+            _productActivityMap.Clear();
+
+            if (_apiData?.applicantData == null)
+                return;
+
+            // Map ProdDescr to UnitActivityName
+            if (!string.IsNullOrEmpty(_apiData.applicantData.ProdDescr) &&
+                !string.IsNullOrEmpty(_apiData.applicantData.UnitActivityName))
+            {
+                _productActivityMap[_apiData.applicantData.ProdDescr] = _apiData.applicantData.UnitActivityName;
+                System.Diagnostics.Debug.WriteLine($"📍 Mapped: {_apiData.applicantData.ProdDescr} → {_apiData.applicantData.UnitActivityName}");
+            }
+
+            // Map ProdDescr2 to UnitActivityName2
+            if (!string.IsNullOrEmpty(_apiData.applicantData.ProdDescr2) &&
+                !string.IsNullOrEmpty(_apiData.applicantData.UnitActivityName2))
+            {
+                _productActivityMap[_apiData.applicantData.ProdDescr2] = _apiData.applicantData.UnitActivityName2;
+                System.Diagnostics.Debug.WriteLine($"📍 Mapped: {_apiData.applicantData.ProdDescr2} → {_apiData.applicantData.UnitActivityName2}");
+            }
+
+            // Map ProdDescr3 to UnitActivityName3
+            if (!string.IsNullOrEmpty(_apiData.applicantData.ProdDescr3) &&
+                !string.IsNullOrEmpty(_apiData.applicantData.UnitActivityName3))
+            {
+                _productActivityMap[_apiData.applicantData.ProdDescr3] = _apiData.applicantData.UnitActivityName3;
+                System.Diagnostics.Debug.WriteLine($"📍 Mapped: {_apiData.applicantData.ProdDescr3} → {_apiData.applicantData.UnitActivityName3}");
+            }
+
+            System.Diagnostics.Debug.WriteLine($"✅ Total mappings created: {_productActivityMap.Count}");
         }
 
         // Add this method anywhere in the class
@@ -1843,81 +1884,77 @@ namespace PMEGP_Physical_V
 
             if (_apiData != null)
             {
-                var annualProductionFrame = CreateFormEntry("Annual Production-Value", _apiData.phyVerificationModel?.AnlProdVal?.ToString("F2") ?? "", false, true);
+                // ✅ Annual Production Value with live conversion
+                var annualProductionFrame = CreateNumericEntryWithWords(
+                    "Annual Production-Value",
+                    _apiData.phyVerificationModel?.AnlProdVal?.ToString("F2") ?? "",
+                    true,
+                    _isEditable
+                );
                 form.Children.Add(annualProductionFrame);
 
-                // Add words for Annual Production
-                // Add words for Annual Production
-                if (_apiData.phyVerificationModel?.AnlProdVal.HasValue == true)
-                {
-                    var productionWords = new Label
-                    {
-                        Text = ConvertNumberToRupeesWords((long)_apiData.phyVerificationModel.AnlProdVal.Value),
-                        FontSize = 11,
-                        TextColor = Color.FromArgb("#666666"),
-                        Margin = new Thickness(0, -10, 0, 5),
-                        FontAttributes = FontAttributes.Italic
-                    };
-                    form.Children.Add(productionWords);
-                }
-
-                var annualSalesFrame = CreateFormEntry("Annual Sales-Value", _apiData.phyVerificationModel?.AnlSaleVal?.ToString("F2") ?? "");
+                // ✅ Annual Sales Value with live conversion
+                var annualSalesFrame = CreateNumericEntryWithWords(
+                    "Annual Sales-Value",
+                    _apiData.phyVerificationModel?.AnlSaleVal?.ToString("F2") ?? "",
+                    false,
+                    _isEditable
+                );
                 form.Children.Add(annualSalesFrame);
 
-                // Add words for Annual Sales
-                if (_apiData.phyVerificationModel?.AnlSaleVal.HasValue == true)
+                // ✅ Build dropdown items from API data
+                var productItems = new List<string> { "--select" };
+
+                if (!string.IsNullOrEmpty(_apiData.applicantData?.ProdDescr))
+                    productItems.Add(_apiData.applicantData.ProdDescr);
+
+                if (!string.IsNullOrEmpty(_apiData.applicantData?.ProdDescr2))
+                    productItems.Add(_apiData.applicantData.ProdDescr2);
+
+                if (!string.IsNullOrEmpty(_apiData.applicantData?.ProdDescr3))
+                    productItems.Add(_apiData.applicantData.ProdDescr3);
+
+                // Determine selected value - try to get from saved state first
+                string selectedProduct = "";
+                string stateKey = NormalizeKey("Product Details - Main Product");
+
+                if (_formState.ContainsKey(stateKey))
                 {
-                    var salesWords = new Label
-                    {
-                        Text = ConvertNumberToRupeesWords((long)_apiData.phyVerificationModel.AnlSaleVal.Value),
-                        FontSize = 11,
-                        TextColor = Color.FromArgb("#666666"),
-                        Margin = new Thickness(0, -10, 0, 5),
-                        FontAttributes = FontAttributes.Italic
-                    };
-                    form.Children.Add(salesWords);
+                    selectedProduct = _formState[stateKey]?.ToString() ?? "";
+                    System.Diagnostics.Debug.WriteLine($"📍 Loading saved product from state: {selectedProduct}");
+                }
+                else if (!string.IsNullOrEmpty(_apiData.applicantData?.ProdDescr))
+                {
+                    // Default to first product if nothing saved
+                    selectedProduct = _apiData.applicantData.ProdDescr;
+                    System.Diagnostics.Debug.WriteLine($"📍 Using default product: {selectedProduct}");
                 }
 
-                // Add Product Details dropdown
-                var productPicker = new Picker
-                {
-                    Title = "Product Details - Main Product",
-                    FontSize = 16,
-                    TextColor = Colors.Black,
-                    BackgroundColor = _isEditable ? Colors.White : Color.FromArgb("#F8F8F8"),
-                    IsEnabled = _isEditable,
-                    HeightRequest = 56,
-                    Margin = new Thickness(0, 10, 0, 0)
-                };
+                // ✅ Product Details Dropdown (Material Design 3 style)
+                var productPickerFrame = CreateProductDropdown(
+                    "Product Details - Main Product",
+                    productItems,
+                    selectedProduct,
+                    _isEditable
+                );
+                form.Children.Add(productPickerFrame);
 
-                productPicker.Items.Add("--select");
-                productPicker.Items.Add("Opencast mining of hard coal");
-                productPicker.Items.Add("Cleaning, sizing, grading, pulverizing, compressing etc. of coal");
-                productPicker.Items.Add("Belowground mining of hard coal");
-
-                // Try to select existing value or default
-                string existingProduct = _apiData.applicantData?.ProdDescr2 ?? "";
-                if (productPicker.Items.Contains(existingProduct))
-                    productPicker.SelectedItem = existingProduct;
-                else
-                    productPicker.SelectedIndex = 0;
-
-                form.Children.Add(productPicker);
-
-                productPicker.SelectedIndexChanged += (s, e) =>
-                {
-                    if (productPicker.SelectedItem != null)
-                    {
-                        string key = NormalizeKey(productPicker.Title);
-                        _formState[key] = productPicker.SelectedItem.ToString();
-                        System.Diagnostics.Debug.WriteLine($"   💾 Product dropdown changed: {productPicker.SelectedItem}");
-                    }
-                };
-
-                var exportValueFrame = CreateFormEntry("Export Detail - value*", _apiData.phyVerificationModel?.ExportDetails?.ToString("F2") ?? "");
+                // ✅ Export Detail Value with live conversion
+                var exportValueFrame = CreateNumericEntryWithWords(
+                    "Export Detail - value*",
+                    _apiData.phyVerificationModel?.ExportDetails?.ToString("F2") ?? "",
+                    false,
+                    _isEditable
+                );
                 form.Children.Add(exportValueFrame);
 
-                form.Children.Add(CreateFormEntry("Export Detail - Country of Export*", _apiData.phyVerificationModel?.ExportDetCount ?? "", false, false, _isEditable));
+                form.Children.Add(CreateFormEntry(
+                    "Export Detail - Country of Export*",
+                    _apiData.phyVerificationModel?.ExportDetCount ?? "",
+                    false,
+                    false,
+                    _isEditable
+                ));
             }
 
             string nextButtonText = _isEditable ? "SAVE & NEXT" : "NEXT";
@@ -1934,6 +1971,414 @@ namespace PMEGP_Physical_V
             form.Children.Add(navigationButtons);
 
             ContentContainer.Children.Add(form);
+        }
+
+        /// <summary>
+        /// Creates a specialized product dropdown that tracks activity codes
+        /// </summary>
+        private Grid CreateProductDropdown(string placeholder, List<string> items, string selectedValue, bool isEditable)
+        {
+            var grid = new Grid
+            {
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+
+            var primaryColor = Color.FromArgb("#1976D2");
+            var surfaceColor = isEditable ? Colors.White : Color.FromArgb("#F5F5F5");
+            var onSurfaceColor = isEditable ? Color.FromArgb("#1C1B1F") : Color.FromArgb("#79747E");
+            var outlineColor = isEditable ? Color.FromArgb("#1976D2") : Color.FromArgb("#BDBDBD");
+
+            var container = new Border
+            {
+                BackgroundColor = surfaceColor,
+                Stroke = outlineColor,
+                StrokeThickness = 1.5,
+                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                Padding = new Thickness(16, 4, 16, 4),
+                MinimumHeightRequest = 64,
+                Shadow = isEditable ? new Shadow
+                {
+                    Brush = new SolidColorBrush(Color.FromArgb("#40000000")),
+                    Opacity = 0.15f,
+                    Radius = 4,
+                    Offset = new Point(0, 2)
+                } : null
+            };
+
+            var textStack = new VerticalStackLayout
+            {
+                Spacing = 2,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            var label = new Label
+            {
+                Text = placeholder,
+                FontSize = 12,
+                TextColor = isEditable ? primaryColor : Color.FromArgb("#9E9E9E"),
+                FontAttributes = FontAttributes.Bold
+            };
+
+            var picker = new Picker
+            {
+                FontSize = 16,
+                TextColor = onSurfaceColor,
+                BackgroundColor = Colors.Transparent,
+                IsEnabled = isEditable,
+                VerticalOptions = LayoutOptions.Center,
+                Margin = new Thickness(0, -4, 0, 0),
+                Title = "", // Remove default title since we have label above
+                ClassId = "ProductPicker" // For easy identification
+            };
+
+            // Add items
+            foreach (var item in items)
+            {
+                picker.Items.Add(item);
+            }
+
+            // Set selected value
+            if (!string.IsNullOrEmpty(selectedValue) && picker.Items.Contains(selectedValue))
+            {
+                picker.SelectedItem = selectedValue;
+
+                // Set the corresponding activity code
+                if (_productActivityMap.ContainsKey(selectedValue))
+                {
+                    _selectedProductCode = _productActivityMap[selectedValue];
+                    System.Diagnostics.Debug.WriteLine($"📍 Selected product: {selectedValue} → Code: {_selectedProductCode}");
+                }
+            }
+            else if (items.Count > 0)
+            {
+                picker.SelectedIndex = 0;
+            }
+
+            // Focus effects
+            picker.Focused += (s, e) =>
+            {
+                container.Stroke = primaryColor;
+                container.StrokeThickness = 2.5;
+            };
+
+            picker.Unfocused += (s, e) =>
+            {
+                container.Stroke = outlineColor;
+                container.StrokeThickness = 1.5;
+            };
+
+            // ✅ Handle selection change - store both product and activity code
+            picker.SelectedIndexChanged += (s, e) =>
+            {
+                if (picker.SelectedItem != null)
+                {
+                    string selectedProduct = picker.SelectedItem.ToString();
+                    string key = NormalizeKey(placeholder);
+
+                    // Save the product description
+                    _formState[key] = selectedProduct;
+
+                    // Get and save the corresponding activity code
+                    if (_productActivityMap.ContainsKey(selectedProduct))
+                    {
+                        _selectedProductCode = _productActivityMap[selectedProduct];
+                        _formState[key + "_ActivityCode"] = _selectedProductCode;
+
+                        System.Diagnostics.Debug.WriteLine($"💾 Product selection changed:");
+                        System.Diagnostics.Debug.WriteLine($"   Product: {selectedProduct}");
+                        System.Diagnostics.Debug.WriteLine($"   Activity Code: {_selectedProductCode}");
+                    }
+                    else if (selectedProduct != "--select")
+                    {
+                        System.Diagnostics.Debug.WriteLine($"⚠️ No activity code found for: {selectedProduct}");
+                        _selectedProductCode = "";
+                    }
+                }
+            };
+
+            textStack.Children.Add(label);
+            textStack.Children.Add(picker);
+
+            container.Content = textStack;
+            grid.Children.Add(container);
+
+            return grid;
+        }
+
+        /// <summary>
+        /// Creates a numeric entry field with live number-to-words conversion below
+        /// </summary>
+        private StackLayout CreateNumericEntryWithWords(string placeholder, string text, bool isFirstField, bool isEditable)
+        {
+            var container = new StackLayout { Spacing = 0 };
+
+            // Material Design 3 styled entry
+            var grid = new Grid
+            {
+                Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0, 12, 0, 0)
+            };
+
+            var primaryColor = Color.FromArgb("#1976D2");
+            var surfaceColor = isEditable ? Colors.White : Color.FromArgb("#F5F5F5");
+            var onSurfaceColor = isEditable ? Color.FromArgb("#1C1B1F") : Color.FromArgb("#79747E");
+            var outlineColor = isEditable ? Color.FromArgb("#1976D2") : Color.FromArgb("#BDBDBD");
+
+            var border = new Border
+            {
+                BackgroundColor = surfaceColor,
+                Stroke = outlineColor,
+                StrokeThickness = 1.5,
+                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                Padding = new Thickness(16, 4, 12, 4),
+                MinimumHeightRequest = 64,
+                Shadow = isEditable ? new Shadow
+                {
+                    Brush = new SolidColorBrush(Color.FromArgb("#40000000")),
+                    Opacity = 0.15f,
+                    Radius = 4,
+                    Offset = new Point(0, 2)
+                } : null
+            };
+
+            var mainGrid = new Grid
+            {
+                ColumnDefinitions =
+        {
+            new ColumnDefinition { Width = GridLength.Star },
+            new ColumnDefinition { Width = GridLength.Auto }
+        },
+                RowSpacing = 0
+            };
+
+            var textStack = new VerticalStackLayout
+            {
+                Spacing = 2,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            var label = new Label
+            {
+                Text = placeholder,
+                FontSize = 12,
+                TextColor = isEditable ? primaryColor : Color.FromArgb("#9E9E9E"),
+                FontAttributes = FontAttributes.Bold,
+                Margin = new Thickness(0, 0, 0, 0)
+            };
+
+            // ✅ Numeric entry with numpad keyboard
+            var entry = new Entry
+            {
+                Text = text,
+                FontSize = 16,
+                TextColor = onSurfaceColor,
+                BackgroundColor = Colors.Transparent,
+                IsReadOnly = !isEditable,
+                IsEnabled = isEditable,
+                VerticalOptions = LayoutOptions.Center,
+                Margin = new Thickness(0, -4, 0, 0),
+                VerticalTextAlignment = TextAlignment.Center,
+                Keyboard = Keyboard.Numeric, // ✅ NUMPAD KEYBOARD
+                Placeholder = "0.00"
+            };
+
+            // Focus effects
+            entry.Focused += (s, e) =>
+            {
+                border.Stroke = primaryColor;
+                border.StrokeThickness = 2.5;
+            };
+
+            entry.Unfocused += (s, e) =>
+            {
+                border.Stroke = outlineColor;
+                border.StrokeThickness = 1.5;
+            };
+
+            textStack.Children.Add(label);
+            textStack.Children.Add(entry);
+
+            Grid.SetColumn(textStack, 0);
+            mainGrid.Children.Add(textStack);
+
+            // Edit icon
+            if (isEditable)
+            {
+                var editIconBorder = new Border
+                {
+                    BackgroundColor = Color.FromArgb("#E8F5E9"),
+                    StrokeThickness = 0,
+                    StrokeShape = new RoundRectangle { CornerRadius = 20 },
+                    Padding = new Thickness(8),
+                    WidthRequest = 40,
+                    HeightRequest = 40,
+                    VerticalOptions = LayoutOptions.Center,
+                    Margin = new Thickness(8, 0, 0, 0)
+                };
+
+                var editIcon = new Label
+                {
+                    Text = "💰",
+                    FontSize = 18,
+                    HorizontalOptions = LayoutOptions.Center,
+                    VerticalOptions = LayoutOptions.Center
+                };
+
+                editIconBorder.Content = editIcon;
+                Grid.SetColumn(editIconBorder, 1);
+                mainGrid.Children.Add(editIconBorder);
+            }
+
+            border.Content = mainGrid;
+            grid.Children.Add(border);
+
+            // ✅ Add words label below the entry
+            var wordsLabel = new Label
+            {
+                Text = "",
+                FontSize = 11,
+                TextColor = Color.FromArgb("#666666"),
+                Margin = new Thickness(16, 4, 0, 0),
+                FontAttributes = FontAttributes.Italic,
+                LineBreakMode = LineBreakMode.WordWrap,
+                ClassId = $"Words_{NormalizeKey(placeholder)}" // Unique ID for finding later
+            };
+
+            // ✅ Initialize with existing value
+            if (!string.IsNullOrEmpty(text) && decimal.TryParse(text, out decimal initialValue))
+            {
+                wordsLabel.Text = ConvertNumberToRupeesWords((long)initialValue);
+            }
+
+            // ✅ Live conversion on text change
+            entry.TextChanged += (s, e) =>
+            {
+                if (string.IsNullOrWhiteSpace(e.NewTextValue))
+                {
+                    wordsLabel.Text = "";
+                    return;
+                }
+
+                // Remove any existing words to prevent duplicates
+                if (decimal.TryParse(e.NewTextValue, out decimal value))
+                {
+                    wordsLabel.Text = ConvertNumberToRupeesWords((long)value);
+                }
+                else
+                {
+                    wordsLabel.Text = "";
+                }
+            };
+
+            container.Children.Add(grid);
+            container.Children.Add(wordsLabel);
+
+            return container;
+        }
+
+        /// <summary>
+        /// Creates a Material Design 3 styled dropdown picker
+        /// </summary>
+        private Grid CreateMaterialDropdown(string placeholder, List<string> items, string selectedValue, bool isEditable)
+        {
+            var grid = new Grid
+            {
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+
+            var primaryColor = Color.FromArgb("#1976D2");
+            var surfaceColor = isEditable ? Colors.White : Color.FromArgb("#F5F5F5");
+            var onSurfaceColor = isEditable ? Color.FromArgb("#1C1B1F") : Color.FromArgb("#79747E");
+            var outlineColor = isEditable ? Color.FromArgb("#1976D2") : Color.FromArgb("#BDBDBD");
+
+            var container = new Border
+            {
+                BackgroundColor = surfaceColor,
+                Stroke = outlineColor,
+                StrokeThickness = 1.5,
+                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                Padding = new Thickness(16, 4, 16, 4),
+                MinimumHeightRequest = 64,
+                Shadow = isEditable ? new Shadow
+                {
+                    Brush = new SolidColorBrush(Color.FromArgb("#40000000")),
+                    Opacity = 0.15f,
+                    Radius = 4,
+                    Offset = new Point(0, 2)
+                } : null
+            };
+
+            var textStack = new VerticalStackLayout
+            {
+                Spacing = 2,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            var label = new Label
+            {
+                Text = placeholder,
+                FontSize = 12,
+                TextColor = isEditable ? primaryColor : Color.FromArgb("#9E9E9E"),
+                FontAttributes = FontAttributes.Bold
+            };
+
+            var picker = new Picker
+            {
+                FontSize = 16,
+                TextColor = onSurfaceColor,
+                BackgroundColor = Colors.Transparent,
+                IsEnabled = isEditable,
+                VerticalOptions = LayoutOptions.Center,
+                Margin = new Thickness(0, -4, 0, 0),
+                Title = "" // Remove default title since we have label above
+            };
+
+            // Add items
+            foreach (var item in items)
+            {
+                picker.Items.Add(item);
+            }
+
+            // Set selected value
+            if (!string.IsNullOrEmpty(selectedValue) && picker.Items.Contains(selectedValue))
+            {
+                picker.SelectedItem = selectedValue;
+            }
+            else
+            {
+                picker.SelectedIndex = 0;
+            }
+
+            // Focus effects
+            picker.Focused += (s, e) =>
+            {
+                container.Stroke = primaryColor;
+                container.StrokeThickness = 2.5;
+            };
+
+            picker.Unfocused += (s, e) =>
+            {
+                container.Stroke = outlineColor;
+                container.StrokeThickness = 1.5;
+            };
+
+            // Save selection to form state
+            picker.SelectedIndexChanged += (s, e) =>
+            {
+                if (picker.SelectedItem != null)
+                {
+                    string key = NormalizeKey(placeholder);
+                    _formState[key] = picker.SelectedItem.ToString();
+                    System.Diagnostics.Debug.WriteLine($"   💾 Product dropdown changed: {picker.SelectedItem}");
+                }
+            };
+
+            textStack.Children.Add(label);
+            textStack.Children.Add(picker);
+
+            container.Content = textStack;
+            grid.Children.Add(container);
+
+            return grid;
         }
 
         private void LoadEmploymentContent()
@@ -3000,20 +3445,72 @@ namespace PMEGP_Physical_V
             var summary = new StackLayout { Spacing = 16 };
             if (_apiData != null)
             {
-                var annualProductionFrame = CreateFormEntry("Annual Production-Value", _apiData.phyVerificationModel?.AnlProdVal?.ToString("F2") ?? "", false, true, false, true);
+                // Use the new numeric entry with words for summary
+                var annualProductionFrame = CreateNumericEntryWithWords(
+                    "Annual Production-Value",
+                    _apiData.phyVerificationModel?.AnlProdVal?.ToString("F2") ?? "",
+                    true,
+                    false
+                );
                 summary.Children.Add(annualProductionFrame);
 
-                var annualSalesFrame = CreateFormEntry("Annual Sales-Value", _apiData.phyVerificationModel?.AnlSaleVal?.ToString("F2") ?? "", false, false, false, true);
+                var annualSalesFrame = CreateNumericEntryWithWords(
+                    "Annual Sales-Value",
+                    _apiData.phyVerificationModel?.AnlSaleVal?.ToString("F2") ?? "",
+                    false,
+                    false
+                );
                 summary.Children.Add(annualSalesFrame);
 
-                var productDescFrame = CreateMultilineEntry("Product Details-Main Product", _apiData.applicantData?.ProdDescr2 ?? "", false, false, true);
-                summary.Children.Add(productDescFrame);
+                // ✅ Build product items from API
+                var productItems = new List<string> { "--select" };
 
-                var exportValueFrame = CreateFormEntry("Export Detail - value*", _apiData.phyVerificationModel?.ExportDetails?.ToString("F2") ?? "", false, false, false, true);
+                if (!string.IsNullOrEmpty(_apiData.applicantData?.ProdDescr))
+                    productItems.Add(_apiData.applicantData.ProdDescr);
+
+                if (!string.IsNullOrEmpty(_apiData.applicantData?.ProdDescr2))
+                    productItems.Add(_apiData.applicantData.ProdDescr2);
+
+                if (!string.IsNullOrEmpty(_apiData.applicantData?.ProdDescr3))
+                    productItems.Add(_apiData.applicantData.ProdDescr3);
+
+                // Get selected product from state
+                string selectedProduct = "";
+                string stateKey = NormalizeKey("Product Details - Main Product");
+
+                if (_formState.ContainsKey(stateKey))
+                {
+                    selectedProduct = _formState[stateKey]?.ToString() ?? "";
+                }
+                else if (!string.IsNullOrEmpty(_apiData.applicantData?.ProdDescr))
+                {
+                    selectedProduct = _apiData.applicantData.ProdDescr;
+                }
+
+                var productPickerFrame = CreateProductDropdown(
+                    "Product Details - Main Product",
+                    productItems,
+                    selectedProduct,
+                    false // Read-only in summary
+                );
+                summary.Children.Add(productPickerFrame);
+
+                var exportValueFrame = CreateNumericEntryWithWords(
+                    "Export Detail - value*",
+                    _apiData.phyVerificationModel?.ExportDetails?.ToString("F2") ?? "",
+                    false,
+                    false
+                );
                 summary.Children.Add(exportValueFrame);
 
-                summary.Children.Add(CreateFormEntry("Export Detail - Country of Export*", _apiData.phyVerificationModel?.ExportDetCount ?? "", false, false, false, true));
-
+                summary.Children.Add(CreateFormEntry(
+                    "Export Detail - Country of Export*",
+                    _apiData.phyVerificationModel?.ExportDetCount ?? "",
+                    false,
+                    false,
+                    false,
+                    true
+                ));
             }
             return summary;
         }
@@ -4816,27 +5313,41 @@ namespace PMEGP_Physical_V
                 var exportDetails = FindEntryValue("ExportDetail-value");
                 var exportDetCount = FindEntryValue("ExportDetail-CountryofExport");
 
-                // Get product details from Picker
-                var productDetails = FindPickerValue("ProductDetailsMainProduct");
+                // ✅ Get product details and activity code
+                var productDescription = FindPickerValue("ProductDetails-MainProduct");
+                var activityCode = _selectedProductCode;
 
-                // If picker value is empty or "--select", use API data
-                if (string.IsNullOrEmpty(productDetails) || productDetails == "--select")
+                // If no selection made, try to get from form state
+                if (string.IsNullOrEmpty(activityCode))
                 {
-                    productDetails = _apiData?.applicantData?.ProdDescr2 ?? "";
+                    string stateKey = NormalizeKey("Product Details - Main Product") + "_ActivityCode";
+                    if (_formState.ContainsKey(stateKey))
+                    {
+                        activityCode = _formState[stateKey]?.ToString() ?? "";
+                    }
+                }
+
+                // If still empty, use the first activity code from API
+                if (string.IsNullOrEmpty(activityCode) && _productActivityMap.Count > 0)
+                {
+                    activityCode = _productActivityMap.First().Value;
+                    System.Diagnostics.Debug.WriteLine($"⚠️ Using default activity code: {activityCode}");
                 }
 
                 System.Diagnostics.Debug.WriteLine($"AnlProdVal: '{anlProdVal}'");
                 System.Diagnostics.Debug.WriteLine($"AnlSaleVal: '{anlSaleVal}'");
-                System.Diagnostics.Debug.WriteLine($"ProductDetails: '{productDetails}'");
+                System.Diagnostics.Debug.WriteLine($"ProductDescription: '{productDescription}'");
+                System.Diagnostics.Debug.WriteLine($"ActivityCode: '{activityCode}'");
                 System.Diagnostics.Debug.WriteLine($"ExportDetails: '{exportDetails}'");
                 System.Diagnostics.Debug.WriteLine($"ExportDetCount: '{exportDetCount}'");
 
+                // ✅ Send activity code, not product description
                 var payload = new
                 {
                     ApplID = _applId,
                     AnlProdVal = string.IsNullOrEmpty(anlProdVal) ? 0 : decimal.Parse(anlProdVal),
                     AnlSaleVal = string.IsNullOrEmpty(anlSaleVal) ? 0 : decimal.Parse(anlSaleVal),
-                    ProdDetails = productDetails,
+                    ProdDetails = activityCode, // ✅ Send activity code (e.g., "05101")
                     ExportDetails = string.IsNullOrEmpty(exportDetails) ? 0 : decimal.Parse(exportDetails),
                     ExportDetCount = exportDetCount
                 };

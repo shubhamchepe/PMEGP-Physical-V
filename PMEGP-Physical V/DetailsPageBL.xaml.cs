@@ -1,5 +1,3 @@
-F#nullable enable
-
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -337,6 +335,7 @@ namespace PMEGP_Physical_V
         private double scaleFactor;
         private bool isSmallScreen;
         private bool isTablet;
+        private readonly string _currentStatus;
 
         public DetailsPageBL(string bankIfsc, string status)
         {
@@ -344,6 +343,8 @@ namespace PMEGP_Physical_V
 
             _viewModel = new DetailsPageBLViewModel();
             BindingContext = _viewModel;
+
+            _currentStatus = status;
 
             InitializeResponsiveDesign();
             _ = LoadDataAsync(bankIfsc, status);
@@ -515,14 +516,23 @@ namespace PMEGP_Physical_V
             {
                 if (sender is Frame frame && frame.BindingContext is BankApplicantViewModel applicant)
                 {
-                    int applID = applicant.ApplID;
-                    var detailsPage = new ApplicantDetailsPage(applID);
-                    await Navigation.PushAsync(detailsPage);
+                    // Navigate to BankPhysicalVerificationPage
+                    // Status will be "Pending" or "Completed" based on which dashboard item was tapped
+                    var bankPhysicalVerificationPage = new BankPhysicalVerificationPage(
+                        applicant.ApplID,
+                        _currentStatus
+                    );
+                    await Navigation.PushAsync(bankPhysicalVerificationPage);
+                }
+                else
+                {
+                    await DisplayAlert("Error", "Unable to retrieve applicant information", "OK");
                 }
             }
             catch (Exception ex)
             {
-                await DisplayAlert("Error", $"Unable to open applicant details: {ex.Message}", "OK");
+                System.Diagnostics.Debug.WriteLine($"Navigation error: {ex.Message}");
+                await DisplayAlert("Error", $"Unable to open verification page: {ex.Message}", "OK");
             }
         }
 
