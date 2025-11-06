@@ -472,19 +472,45 @@ namespace PMEGP_Physical_V
         }
 
         // Helper method to convert Unix timestamp to readable date
-        private string ConvertUnixToDate(string unixTimestamp)
+        private string ConvertUnixToDate(string dateString)
         {
-            if (string.IsNullOrEmpty(unixTimestamp) || !unixTimestamp.StartsWith("/Date("))
+            if (string.IsNullOrEmpty(dateString))
                 return "";
 
             try
             {
-                var timestamp = unixTimestamp.Replace("/Date(", "").Replace(")/", "");
-                var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(timestamp));
-                return dateTime.ToString("dd MMM yyyy");
+                // Handle Unix timestamp format: /Date(1747723687020)/
+                if (dateString.StartsWith("/Date(") && dateString.EndsWith(")/"))
+                {
+                    var timestamp = dateString.Replace("/Date(", "").Replace(")/", "");
+                    if (long.TryParse(timestamp, out long unixTime))
+                    {
+                        var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(unixTime);
+                        // Use local time to avoid timezone conversion issues
+                        return dateTime.LocalDateTime.ToString("dd-MM-yyyy");
+                    }
+                }
+
+                // Handle ISO 8601 format: 2025-11-01T00:00:00
+                if (DateTime.TryParse(dateString, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeLocal, out DateTime parsedDate))
+                {
+                    return parsedDate.ToString("dd-MM-yyyy");
+                }
+
+                // Handle dd-MM-yyyy format (already in correct format)
+                if (DateTime.TryParseExact(dateString, "dd-MM-yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out DateTime exactDate))
+                {
+                    return exactDate.ToString("dd-MM-yyyy");
+                }
+
+                return "";
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Date conversion error: {ex.Message}");
                 return "";
             }
         }
@@ -526,7 +552,7 @@ namespace PMEGP_Physical_V
                 _stepButtons.Add(button);
             }
 
-            var totalWidth = (TotalSteps * 45) + ((TotalSteps - 1) * 18);
+            var totalWidth = (TotalSteps * 65) + ((TotalSteps - 1) * 24);
             StepsContainer.MinimumWidthRequest = totalWidth;
             UpdateStepVisualStates();
         }
@@ -536,11 +562,11 @@ namespace PMEGP_Physical_V
             return new BoxView
             {
                 BackgroundColor = Color.FromArgb("#E0E0E0"),
-                WidthRequest = 18,
-                HeightRequest = 2,
+                WidthRequest = 24,
+                HeightRequest = 3,
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalOptions = LayoutOptions.Center,
-                Margin = new Thickness(2, 0)
+                Margin = new Thickness(3, 0)
             };
         }
 
@@ -551,14 +577,14 @@ namespace PMEGP_Physical_V
             var imageButton = new ImageButton
             {
                 Source = stepInfo.Icon,
-                WidthRequest = 18,
-                HeightRequest = 18,
+                WidthRequest = 32,
+                HeightRequest = 32,
                 BackgroundColor = Colors.White,
                 BorderColor = Color.FromArgb("#E0E0E0"),
-                BorderWidth = 1.5,
-                CornerRadius = 16,
+                BorderWidth = 2,
+                CornerRadius = 20,
                 ClassId = stepNumber.ToString(),
-                Padding = new Thickness(3, 1)
+                Padding = new Thickness(5, 2)
             };
 
             imageButton.Clicked += OnStepButtonClicked;
@@ -566,7 +592,7 @@ namespace PMEGP_Physical_V
             var label = new Label
             {
                 Text = stepInfo.Title,
-                FontSize = 9,
+                FontSize = 11, // Changed from 9
                 HorizontalOptions = LayoutOptions.Center,
                 VerticalOptions = LayoutOptions.Center,
                 TextColor = Color.FromArgb("#666666"),
@@ -577,9 +603,9 @@ namespace PMEGP_Physical_V
 
             var container = new StackLayout
             {
-                Spacing = 4,
-                Padding = new Thickness(6, 3),
-                MinimumWidthRequest = 45,
+                Spacing = 6,
+                Padding = new Thickness(8, 4),
+                MinimumWidthRequest = 65,
                 HorizontalOptions = LayoutOptions.Start,
                 VerticalOptions = LayoutOptions.Center,
                 Children = { imageButton, label }
@@ -642,10 +668,14 @@ namespace PMEGP_Physical_V
 
         private void UpdateStepVisualStates()
         {
-            for (int i = 0; i < _stepButtons.Count; i++)
+            // Use BatchBegin/BatchCommit for faster UI updates
+            MainThread.BeginInvokeOnMainThread(() =>
             {
-                UpdateStepButtonAppearance(_stepButtons[i], i + 1);
-            }
+                for (int i = 0; i < _stepButtons.Count; i++)
+                {
+                    UpdateStepButtonAppearance(_stepButtons[i], i + 1);
+                }
+            });
         }
 
         private async void OnStepButtonClicked(object sender, EventArgs e)
@@ -673,7 +703,7 @@ namespace PMEGP_Physical_V
                 LoadStepContent(_currentStep);
 
                 // CRITICAL: Wait for UI to fully render before restoring
-                await Task.Delay(200); // Increased delay to ensure UI is ready
+                await Task.Delay(50); // Increased delay to ensure UI is ready
 
                 // Restore saved state for the new step
                 RestoreStepState();
@@ -687,10 +717,12 @@ namespace PMEGP_Physical_V
         private async Task ScrollToStep(int stepNumber)
         {
             var stepIndex = stepNumber - 1;
-            var buttonWidth = 60;
+            var buttonWidth = 85;  // Updated from 60 to match new button size (65 + padding)
             var connectorWidth = 30;
             var scrollX = stepIndex * (buttonWidth + connectorWidth) - 100;
-            await StepScrollView.ScrollToAsync(Math.Max(0.0, (double)scrollX), 0, true);
+
+            // Use non-animated scroll for instant response
+            await StepScrollView.ScrollToAsync(Math.Max(0.0, (double)scrollX), 0, false); // Changed true to false
         }
 
         /// <summary>
@@ -1432,7 +1464,7 @@ namespace PMEGP_Physical_V
                                                    _apiData.phyVerificationModel.VeriStatus == "NT" ? "Non-Traceable" : "Working";
                 }
 
-                form.Children.Add(CreateFormEntry("Unit Establishment Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.UnitEstDate), true, false, _isEditable));
+                form.Children.Add(CreateDatePickerEntry("Unit Establishment Date*", ConvertUnixToDate(_apiData.phyVerificationModel?.UnitEstDate), false, _isEditable));
                 form.Children.Add(CreateFormEntry("GST Registration Number*", _apiData.phyVerificationModel?.UnitGSTNo ?? "", false, false, _isEditable));
                 form.Children.Add(CreateFormEntry("Udyam Registration Number", _apiData.phyVerificationModel?.UnitUdyamRegNo ?? "", false, false, false));
                 form.Children.Add(CreateFormEntry("Unit Location*", _apiData.phyVerificationModel?.UnitLocation ?? "", false, false, _isEditable));
@@ -1500,6 +1532,156 @@ namespace PMEGP_Physical_V
             form.Children.Add(navigationButtons);
 
             ContentContainer.Children.Add(form);
+        }
+
+        private Grid CreateDatePickerEntry(string placeholder, string text = "", bool isFirstField = false, bool forceEditable = false)
+        {
+            var grid = new Grid
+            {
+                Margin = isFirstField ? new Thickness(0, 15, 0, 0) : new Thickness(0, 12, 0, 0)
+            };
+
+            bool isReadOnly = !(_isEditable || forceEditable);
+
+            // Material Design 3 colors
+            var primaryColor = Color.FromArgb("#1976D2");
+            var surfaceColor = !isReadOnly ? Colors.White : Color.FromArgb("#F5F5F5");
+            var onSurfaceColor = !isReadOnly ? Color.FromArgb("#1C1B1F") : Color.FromArgb("#79747E");
+            var outlineColor = !isReadOnly ? Color.FromArgb("#1976D2") : Color.FromArgb("#BDBDBD");
+
+            // Main container with proper border
+            var container = new Border
+            {
+                BackgroundColor = surfaceColor,
+                Stroke = outlineColor,
+                StrokeThickness = 1.5,
+                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                Padding = new Thickness(16, 4, 12, 4),
+                MinimumHeightRequest = 64,
+                Shadow = !isReadOnly ? new Shadow
+                {
+                    Brush = new SolidColorBrush(Color.FromArgb("#40000000")),
+                    Opacity = 0.15f,
+                    Radius = 4,
+                    Offset = new Point(0, 2)
+                } : null
+            };
+
+            var mainGrid = new Grid
+            {
+                ColumnDefinitions =
+        {
+            new ColumnDefinition { Width = GridLength.Star },
+            new ColumnDefinition { Width = GridLength.Auto }
+        },
+                RowSpacing = 0
+            };
+
+            // Text container
+            var textStack = new VerticalStackLayout
+            {
+                Spacing = 2,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            // Label (always visible, smaller)
+            var label = new Label
+            {
+                Text = placeholder,
+                FontSize = 12,
+                TextColor = !isReadOnly ? primaryColor : Color.FromArgb("#9E9E9E"),
+                FontAttributes = FontAttributes.Bold,
+                Margin = new Thickness(0, 0, 0, 0)
+            };
+
+            // Entry field with proper alignment
+            var entry = new Entry
+            {
+                Text = text,
+                FontSize = 16,
+                TextColor = onSurfaceColor,
+                BackgroundColor = Colors.Transparent,
+                IsReadOnly = true, // Always read-only as we'll use date picker
+                IsEnabled = !isReadOnly,
+                VerticalOptions = LayoutOptions.Center,
+                Margin = new Thickness(0, -4, 0, 0),
+                VerticalTextAlignment = TextAlignment.Center,
+                Placeholder = "Select date"
+            };
+
+            // Add tap gesture to entry for date picker
+            if (!isReadOnly)
+            {
+                var entryTapGesture = new TapGestureRecognizer();
+                entryTapGesture.Tapped += async (s, e) =>
+                {
+                    await OpenDatePicker(entry);
+                };
+                entry.GestureRecognizers.Add(entryTapGesture);
+            }
+
+            // Focus effects
+            entry.Focused += (s, e) =>
+            {
+                container.Stroke = primaryColor;
+                container.StrokeThickness = 2.5;
+            };
+
+            entry.Unfocused += (s, e) =>
+            {
+                container.Stroke = outlineColor;
+                container.StrokeThickness = 1.5;
+            };
+
+            textStack.Children.Add(label);
+            textStack.Children.Add(entry);
+
+            Grid.SetColumn(textStack, 0);
+            mainGrid.Children.Add(textStack);
+
+            // Calendar icon button
+            var iconButton = new Border
+            {
+                BackgroundColor = !isReadOnly ? Color.FromArgb("#E3F2FD") : Color.FromArgb("#F5F5F5"),
+                StrokeThickness = 0,
+                StrokeShape = new RoundRectangle { CornerRadius = 20 },
+                Padding = new Thickness(8),
+                WidthRequest = 40,
+                HeightRequest = 40,
+                VerticalOptions = LayoutOptions.Center,
+                Margin = new Thickness(8, 0, 0, 0)
+            };
+
+            var icon = new Label
+            {
+                Text = "📅",
+                FontSize = 20,
+                HorizontalOptions = LayoutOptions.Center,
+                VerticalOptions = LayoutOptions.Center
+            };
+
+            iconButton.Content = icon;
+
+            if (!isReadOnly)
+            {
+                var tapGesture = new TapGestureRecognizer();
+                tapGesture.Tapped += async (s, e) =>
+                {
+                    // Add scale animation for better feedback
+                    await iconButton.ScaleTo(0.85, 100);
+                    await iconButton.ScaleTo(1, 100);
+                    await OpenDatePicker(entry);
+                };
+                iconButton.GestureRecognizers.Add(tapGesture);
+            }
+
+            Grid.SetColumn(iconButton, 1);
+            mainGrid.Children.Add(iconButton);
+
+            container.Content = mainGrid;
+            grid.Children.Add(container);
+
+            return grid;
         }
 
         private Frame CreateGoogleMap()
@@ -3661,9 +3843,9 @@ namespace PMEGP_Physical_V
                 BackgroundColor = surfaceColor,
                 Stroke = outlineColor,
                 StrokeThickness = 1.5,
-                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                StrokeShape = new RoundRectangle { CornerRadius = 5 },
                 Padding = new Thickness(16, 4, 12, 4),
-                MinimumHeightRequest = 64,
+                MinimumHeightRequest = 24,
                 Shadow = !isReadOnly ? new Shadow
                 {
                     Brush = new SolidColorBrush(Color.FromArgb("#40000000")),
@@ -3740,7 +3922,7 @@ namespace PMEGP_Physical_V
                 {
                     BackgroundColor = !isReadOnly ? Color.FromArgb("#E3F2FD") : Color.FromArgb("#F5F5F5"),
                     StrokeThickness = 0,
-                    StrokeShape = new RoundRectangle { CornerRadius = 20 },
+                    StrokeShape = new RoundRectangle { CornerRadius = 5 },
                     Padding = new Thickness(8),
                     WidthRequest = 40,
                     HeightRequest = 40,
@@ -3812,27 +3994,43 @@ namespace PMEGP_Physical_V
             {
                 // Parse existing date or use today
                 DateTime selectedDate = DateTime.Today;
-                if (!string.IsNullOrEmpty(targetEntry.Text))
+                if (!string.IsNullOrEmpty(targetEntry.Text) && targetEntry.Text != "Select date")
                 {
-                    if (DateTime.TryParseExact(targetEntry.Text, "dd-MM-yyyy",
+                    // Try dd MMM yyyy format first (from API)
+                    if (DateTime.TryParseExact(targetEntry.Text, "dd MMM yyyy",
                         System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.None, out DateTime parsedDate))
+                        System.Globalization.DateTimeStyles.None, out DateTime parsedDate1))
                     {
-                        selectedDate = parsedDate;
+                        selectedDate = parsedDate1;
+                    }
+                    // Try dd-MM-yyyy format (user selected)
+                    else if (DateTime.TryParseExact(targetEntry.Text, "dd-MM-yyyy",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out DateTime parsedDate2))
+                    {
+                        selectedDate = parsedDate2;
                     }
                 }
 
-                // Show native date picker
+                // Show date picker modal
                 var pickedDate = await DisplayPromptDateAsync(selectedDate);
 
                 if (pickedDate.HasValue)
                 {
+                    // Format as dd-MM-yyyy
                     targetEntry.Text = pickedDate.Value.ToString("dd-MM-yyyy");
+
+                    // Save to form state
+                    string key = NormalizeKey("UnitEstablishmentDate");
+                    _formState[key] = targetEntry.Text;
+
+                    System.Diagnostics.Debug.WriteLine($"📅 Date picked: {targetEntry.Text}");
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Date picker error: {ex.Message}");
+                await DisplayAlert("Error", $"Failed to select date: {ex.Message}", "OK");
             }
         }
 
@@ -3855,15 +4053,28 @@ namespace PMEGP_Physical_V
                 HasShadow = true
             };
 
+            var headerLabel = new Label
+            {
+                Text = "Select Establishment Date",
+                FontSize = 18,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Color.FromArgb("#333333"),
+                HorizontalTextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 15)
+            };
+
             var datePicker = new DatePicker
             {
                 Date = initialDate,
-                MinimumDate = new DateTime(1900, 1, 1),
-                MaximumDate = DateTime.Today.AddYears(10),
+                MinimumDate = new DateTime(1990, 1, 1),
+                MaximumDate = DateTime.Today,
                 Format = "dd-MM-yyyy",
-                FontSize = 18
+                FontSize = 18,
+                HorizontalOptions = LayoutOptions.Center,
+                TextColor = Colors.Black,
+                BackgroundColor = Colors.White
             };
-
+            datePicker.SetAppThemeColor(DatePicker.TextColorProperty, Colors.Black, Colors.Black);
             var buttonGrid = new Grid
             {
                 ColumnDefinitions = new ColumnDefinitionCollection
@@ -3913,7 +4124,7 @@ namespace PMEGP_Physical_V
             var contentStack = new StackLayout
             {
                 Spacing = 20,
-                Children = { datePicker, buttonGrid }
+                Children = { headerLabel, datePicker, buttonGrid } // Added headerLabel
             };
 
             contentFrame.Content = contentStack;

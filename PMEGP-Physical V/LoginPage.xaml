@@ -5,246 +5,251 @@
              Title="LoginPage"
              NavigationPage.HasNavigationBar="False"
              BackgroundColor="#C0C0C0">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
 
-        <!-- Tab Buttons Container -->
-        <Grid Grid.Row="1" Margin="30,10,30,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+    <ScrollView>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="80" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="80" />
+            </Grid.RowDefinitions>
 
-            <!-- Bank Login Tab -->
-            <Border x:Name="BankLoginTab" 
-                    Grid.Column="0" 
-                    BackgroundColor="#B8D4C2" 
-                    StrokeThickness="0" 
-                    StrokeShape="RoundRectangle 6,6,6,6"
-                    Padding="0"
-                    HeightRequest="40">
-                <Border.GestureRecognizers>
-                    <TapGestureRecognizer Tapped="OnBankLoginTabTapped" />
-                </Border.GestureRecognizers>
-                <Label x:Name="BankLoginTabLabel"
-                       Text="Bank Login" 
-                       FontSize="18" 
-                       FontAttributes="Bold" 
-                       TextColor="#FF6B35" 
-                       HorizontalOptions="Center" 
-                       VerticalOptions="Center" />
-            </Border>
-
-            <!-- Unit Login Tab -->
-            <Border x:Name="UnitLoginTab" 
-                    Grid.Column="1" 
-                    BackgroundColor="#FF6B35" 
-                    StrokeThickness="0" 
-                    StrokeShape="RoundRectangle 6,6,6,6"
-                    Padding="0"
-                    HeightRequest="40">
-                <Border.GestureRecognizers>
-                    <TapGestureRecognizer Tapped="OnUnitLoginTabTapped" />
-                </Border.GestureRecognizers>
-                <Label x:Name="UnitLoginTabLabel"
-                       Text="Unit Login" 
-                       FontSize="18" 
-                       FontAttributes="Bold" 
-                       TextColor="White" 
-                       HorizontalOptions="Center" 
-                       VerticalOptions="Center" />
-            </Border>
-        </Grid>
-
-        <!-- Main Login Container -->
-        <Border Grid.Row="2" 
-                BackgroundColor="White" 
-                StrokeThickness="0" 
-                StrokeShape="RoundRectangle 12" 
-                Margin="30,0,30,0" 
-                VerticalOptions="Start">
-            <Grid>
+            <!-- Tab Buttons Container -->
+            <Grid Grid.Row="1" Margin="30,10,30,10">
+                <!-- Rest of your tab code remains the same -->
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="5" />
+                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Orange Left Border -->
-                <BoxView Grid.Column="0" 
-                         BackgroundColor="#FF6B35" 
-                         VerticalOptions="FillAndExpand" />
+                <!-- Bank Login Tab -->
+                <Border x:Name="BankLoginTab" 
+                        Grid.Column="0" 
+                        BackgroundColor="#B8D4C2" 
+                        StrokeThickness="0" 
+                        StrokeShape="RoundRectangle 6,6,6,6"
+                        Padding="0"
+                        HeightRequest="40">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnBankLoginTabTapped" />
+                    </Border.GestureRecognizers>
+                    <Label x:Name="BankLoginTabLabel"
+                           Text="Bank Login" 
+                           FontSize="18" 
+                           FontAttributes="Bold" 
+                           TextColor="#FF6B35" 
+                           HorizontalOptions="Center" 
+                           VerticalOptions="Center" />
+                </Border>
 
-                <!-- Main Content -->
-                <StackLayout Grid.Column="1" Spacing="0">
-                    <!-- Header with Light Green Background -->
-                    <Border BackgroundColor="#B8D4C2" 
-                            Padding="20" 
-                            StrokeThickness="0" 
-                            StrokeShape="RoundRectangle 12,12,0,0">
-                        <Label x:Name="HeadingLabel"
-       Text="Physical Verification Login" 
-       FontSize="18" 
-       FontAttributes="Bold" 
-       TextColor="Black" 
-       HorizontalOptions="Center" 
-       VerticalOptions="Center" />
-                    </Border>
+                <!-- Unit Login Tab -->
+                <Border x:Name="UnitLoginTab" 
+                        Grid.Column="1" 
+                        BackgroundColor="#FF6B35" 
+                        StrokeThickness="0" 
+                        StrokeShape="RoundRectangle 6,6,6,6"
+                        Padding="0"
+                        HeightRequest="40">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnUnitLoginTabTapped" />
+                    </Border.GestureRecognizers>
+                    <Label x:Name="UnitLoginTabLabel"
+                           Text="Unit Login" 
+                           FontSize="18" 
+                           FontAttributes="Bold" 
+                           TextColor="White" 
+                           HorizontalOptions="Center" 
+                           VerticalOptions="Center" />
+                </Border>
+            </Grid>
 
-                    <!-- Input Fields Container -->
-                    <StackLayout Padding="20" Spacing="20">
-                        <!-- User ID Input -->
-                        <Border BackgroundColor="#E8E8E8" 
-                                StrokeThickness="1" 
-                                Stroke="#D0D0D0" 
-                                StrokeShape="RoundRectangle 8" 
-                                Padding="0" 
-                                HeightRequest="55">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="50" />
-                                </Grid.ColumnDefinitions>
-                                <Entry x:Name="UserIdEntry" 
-                                       Grid.Column="0" 
-                                       Placeholder="User ID" 
-                                       BackgroundColor="Transparent" 
-                                       TextColor="Black" 
-                                       PlaceholderColor="#888888" 
-                                       FontSize="16" 
-                                       Margin="15,0,0,0" 
-                                       Visual="Material" />
-                                <Image Grid.Column="1" 
-                                       Source="user.png" 
-                                       WidthRequest="24" 
-                                       HeightRequest="24" 
-                                       VerticalOptions="Center" 
-                                       HorizontalOptions="Center" />
-                            </Grid>
+            <!-- Main Login Container -->
+            <Border Grid.Row="2" 
+                    BackgroundColor="White" 
+                    StrokeThickness="0" 
+                    StrokeShape="RoundRectangle 12" 
+                    Margin="30,0,30,0" 
+                    VerticalOptions="Start">
+                <!-- Rest of your login form remains exactly the same -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="5" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Orange Left Border -->
+                    <BoxView Grid.Column="0" 
+                             BackgroundColor="#FF6B35" 
+                             VerticalOptions="FillAndExpand" />
+
+                    <!-- Main Content -->
+                    <StackLayout Grid.Column="1" Spacing="0">
+                        <!-- Header with Light Green Background -->
+                        <Border BackgroundColor="#B8D4C2" 
+                                Padding="20" 
+                                StrokeThickness="0" 
+                                StrokeShape="RoundRectangle 12,12,0,0">
+                            <Label x:Name="HeadingLabel"
+                                   Text="Physical Verification Login" 
+                                   FontSize="18" 
+                                   FontAttributes="Bold" 
+                                   TextColor="Black" 
+                                   HorizontalOptions="Center" 
+                                   VerticalOptions="Center" />
                         </Border>
 
-                        <!-- Password Input -->
-                        <Border BackgroundColor="#E8E8E8" 
-                                StrokeThickness="1" 
-                                Stroke="#D0D0D0" 
-                                StrokeShape="RoundRectangle 8" 
-                                Padding="0" 
-                                HeightRequest="55">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="50" />
-                                </Grid.ColumnDefinitions>
-                                <Entry x:Name="PasswordEntry" 
-                                       Grid.Column="0" 
-                                       Placeholder="Password" 
-                                       IsPassword="True" 
+                        <!-- Input Fields Container -->
+                        <StackLayout Padding="20" Spacing="20">
+                            <!-- User ID Input -->
+                            <Border BackgroundColor="#E8E8E8" 
+                                    StrokeThickness="1" 
+                                    Stroke="#D0D0D0" 
+                                    StrokeShape="RoundRectangle 8" 
+                                    Padding="0" 
+                                    HeightRequest="55">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="50" />
+                                    </Grid.ColumnDefinitions>
+                                    <Entry x:Name="UserIdEntry" 
+                                           Grid.Column="0" 
+                                           Placeholder="User ID" 
+                                           BackgroundColor="Transparent" 
+                                           TextColor="Black" 
+                                           PlaceholderColor="#888888" 
+                                           FontSize="16" 
+                                           Margin="15,0,0,0" 
+                                           Visual="Material" />
+                                    <Image Grid.Column="1" 
+                                           Source="user.png" 
+                                           WidthRequest="24" 
+                                           HeightRequest="24" 
+                                           VerticalOptions="Center" 
+                                           HorizontalOptions="Center" />
+                                </Grid>
+                            </Border>
+
+                            <!-- Password Input -->
+                            <Border BackgroundColor="#E8E8E8" 
+                                    StrokeThickness="1" 
+                                    Stroke="#D0D0D0" 
+                                    StrokeShape="RoundRectangle 8" 
+                                    Padding="0" 
+                                    HeightRequest="55">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="50" />
+                                    </Grid.ColumnDefinitions>
+                                    <Entry x:Name="PasswordEntry" 
+                                           Grid.Column="0" 
+                                           Placeholder="Password" 
+                                           IsPassword="True" 
+                                           BackgroundColor="Transparent" 
+                                           TextColor="Black" 
+                                           PlaceholderColor="#888888" 
+                                           FontSize="16" 
+                                           Margin="15,0,0,0" 
+                                           Visual="Material" 
+                                           ClearButtonVisibility="Never" />
+                                    <Image Grid.Column="1" 
+                                           Source="password.png" 
+                                           WidthRequest="24" 
+                                           HeightRequest="24" 
+                                           VerticalOptions="Center" 
+                                           HorizontalOptions="Center" />
+                                </Grid>
+                            </Border>
+
+                            <!-- CAPTCHA Display (Non-editable) -->
+                            <Border BackgroundColor="#E8E8E8" 
+                                    StrokeThickness="1" 
+                                    Stroke="#D0D0D0" 
+                                    StrokeShape="RoundRectangle 8" 
+                                    Padding="0" 
+                                    HeightRequest="55">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="50" />
+                                    </Grid.ColumnDefinitions>
+                                    <Label x:Name="CaptchaLabel" 
+                                           Grid.Column="0" 
+                                           Text="SLHLL" 
+                                           BackgroundColor="Transparent" 
+                                           TextColor="#666666" 
+                                           FontSize="20" 
+                                           FontAttributes="Bold" 
+                                           VerticalOptions="Center" 
+                                           Margin="15,0,0,0" />
+                                    <ImageButton x:Name="ReloadCaptchaButton" 
+                                                 Grid.Column="1" 
+                                                 Source="reload.png" 
+                                                 BackgroundColor="Transparent" 
+                                                 WidthRequest="30" 
+                                                 HeightRequest="30" 
+                                                 Clicked="OnReloadCaptchaClicked" 
+                                                 HorizontalOptions="Center" 
+                                                 VerticalOptions="Center" />
+                                </Grid>
+                            </Border>
+
+                            <!-- CAPTCHA Input -->
+                            <Border BackgroundColor="#E8E8E8" 
+                                    StrokeThickness="1" 
+                                    Stroke="#D0D0D0" 
+                                    StrokeShape="RoundRectangle 8" 
+                                    Padding="0" 
+                                    HeightRequest="55">
+                                <Entry x:Name="CaptchaEntry" 
+                                       Placeholder="Captcha Input" 
                                        BackgroundColor="Transparent" 
                                        TextColor="Black" 
                                        PlaceholderColor="#888888" 
                                        FontSize="16" 
-                                       Margin="15,0,0,0" 
+                                       Margin="15,0" 
                                        Visual="Material" 
                                        ClearButtonVisibility="Never" />
-                                <Image Grid.Column="1" 
-                                       Source="password.png" 
-                                       WidthRequest="24" 
-                                       HeightRequest="24" 
-                                       VerticalOptions="Center" 
-                                       HorizontalOptions="Center" />
-                            </Grid>
-                        </Border>
+                            </Border>
 
-                        <!-- CAPTCHA Display (Non-editable) -->
-                        <Border BackgroundColor="#E8E8E8" 
-                                StrokeThickness="1" 
-                                Stroke="#D0D0D0" 
-                                StrokeShape="RoundRectangle 8" 
-                                Padding="0" 
-                                HeightRequest="55">
-                            <Grid>
+                            <!-- Bottom Buttons -->
+                            <Grid Margin="0,30,0,20">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="50" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Label x:Name="CaptchaLabel" 
-                                       Grid.Column="0" 
-                                       Text="SLHLL" 
-                                       BackgroundColor="Transparent" 
-                                       TextColor="#666666" 
-                                       FontSize="20" 
-                                       FontAttributes="Bold" 
+
+                                <!-- Forgot Password Link -->
+                                <Label Grid.Column="0" 
+                                       Text="Forgot password?" 
+                                       TextColor="#2E8B57" 
+                                       FontSize="16" 
                                        VerticalOptions="Center" 
-                                       Margin="15,0,0,0" />
-                                <ImageButton x:Name="ReloadCaptchaButton" 
-                                             Grid.Column="1" 
-                                             Source="reload.png" 
-                                             BackgroundColor="Transparent" 
-                                             WidthRequest="30" 
-                                             HeightRequest="30" 
-                                             Clicked="OnReloadCaptchaClicked" 
-                                             HorizontalOptions="Center" 
-                                             VerticalOptions="Center" />
+                                       HorizontalOptions="Start">
+                                    <Label.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnForgotPasswordTapped" />
+                                    </Label.GestureRecognizers>
+                                </Label>
+
+                                <!-- Login Button -->
+                                <Button x:Name="LoginButton" 
+                                        Grid.Column="1" 
+                                        Text="UNIT LOGIN" 
+                                        BackgroundColor="#2E8B57" 
+                                        TextColor="White" 
+                                        FontSize="16" 
+                                        FontAttributes="Bold" 
+                                        CornerRadius="8" 
+                                        WidthRequest="140" 
+                                        HeightRequest="50" 
+                                        Clicked="OnLoginClicked" />
                             </Grid>
-                        </Border>
-
-                        <!-- CAPTCHA Input -->
-                        <Border BackgroundColor="#E8E8E8" 
-                                StrokeThickness="1" 
-                                Stroke="#D0D0D0" 
-                                StrokeShape="RoundRectangle 8" 
-                                Padding="0" 
-                                HeightRequest="55">
-                            <Entry x:Name="CaptchaEntry" 
-                                   Placeholder="Captcha Input" 
-                                   BackgroundColor="Transparent" 
-                                   TextColor="Black" 
-                                   PlaceholderColor="#888888" 
-                                   FontSize="16" 
-                                   Margin="15,0" 
-                                   Visual="Material" 
-                                   ClearButtonVisibility="Never" />
-                        </Border>
-
-                        <!-- Bottom Buttons -->
-                        <Grid Margin="0,30,0,20">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <!-- Forgot Password Link -->
-                            <Label Grid.Column="0" 
-                                   Text="Forgot password?" 
-                                   TextColor="#2E8B57" 
-                                   FontSize="16" 
-                                   VerticalOptions="Center" 
-                                   HorizontalOptions="Start">
-                                <Label.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnForgotPasswordTapped" />
-                                </Label.GestureRecognizers>
-                            </Label>
-
-                            <!-- Login Button -->
-                            <Button x:Name="LoginButton" 
-                                    Grid.Column="1" 
-                                    Text="UNIT LOGIN" 
-                                    BackgroundColor="#2E8B57" 
-                                    TextColor="White" 
-                                    FontSize="16" 
-                                    FontAttributes="Bold" 
-                                    CornerRadius="8" 
-                                    WidthRequest="140" 
-                                    HeightRequest="50" 
-                                    Clicked="OnLoginClicked" />
-                        </Grid>
+                        </StackLayout>
                     </StackLayout>
-                </StackLayout>
-            </Grid>
-        </Border>
-    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </ScrollView>
 </ContentPage>

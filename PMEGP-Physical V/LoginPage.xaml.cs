@@ -167,10 +167,11 @@ public partial class LoginPage : ContentPage
                     // ✨ NEW: Store the UserID that user entered
                     response.UserID = UserIdEntry.Text.Trim();
                     // Successful login
-                    await DisplayAlert("Success", response.Message ?? "Login successful!", "OK");
+                    //await DisplayAlert("Success", response.Message ?? "Login successful!", "OK");
 
                     // Navigate to dashboard only on success
-                    await Navigation.PushAsync(new DashboardPage(response));
+                    var dashboardPage = new DashboardPage(response, showToast: true);
+                    await Navigation.PushAsync(dashboardPage);
                 }
                 else
                 {

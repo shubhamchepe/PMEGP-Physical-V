@@ -65,13 +65,15 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
     private readonly HttpClient _httpClient;
     private bool _isLoading = false;
     private bool _isDisposed = false;
+    private readonly bool _showToastOnLoad = false;
     #endregion
 
     #region Constructor
-    public DashboardPage(LoginPage.LoginResponse response)
+    public DashboardPage(LoginPage.LoginResponse response, bool showToast = false)
     {
         InitializeComponent();
         _loginResponse = response;
+        _showToastOnLoad = showToast;
 
         // ⚠️ Development ONLY: Bypass SSL certificate validation
         var handler = new HttpClientHandler
@@ -107,6 +109,102 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
         if (!_isLoading && !_isDisposed)
         {
             await LoadDashboardDataAsync();
+
+            // ✅ Show toast after data loads
+            if (_showToastOnLoad)
+            {
+                ShowToast("Login successful!");
+            }
+        }
+    }
+
+    private async void ShowToast(string message)
+    {
+        try
+        {
+            // Create toast container
+            var toastFrame = new Frame
+            {
+                BackgroundColor = Color.FromArgb("#2E8B57"), // Green color
+                CornerRadius = 10,
+                Padding = new Thickness(20, 15),
+                Margin = new Thickness(20, 0, 20, 20),
+                HasShadow = true,
+                HorizontalOptions = LayoutOptions.Fill,
+                VerticalOptions = LayoutOptions.End,
+                Opacity = 0,
+                TranslationY = 100
+            };
+
+            var toastLayout = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitionCollection
+                {
+                    new ColumnDefinition { Width = GridLength.Auto },
+                    new ColumnDefinition { Width = GridLength.Star }
+                },
+                ColumnSpacing = 12
+            };
+
+            // Success icon
+            var iconLabel = new Label
+            {
+                Text = "✓",
+                FontSize = 24,
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                VerticalOptions = LayoutOptions.Center,
+                HorizontalOptions = LayoutOptions.Center
+            };
+
+            // Message text
+            var messageLabel = new Label
+            {
+                Text = message,
+                FontSize = 16,
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                VerticalOptions = LayoutOptions.Center,
+                LineBreakMode = LineBreakMode.WordWrap
+            };
+
+            Grid.SetColumn(iconLabel, 0);
+            Grid.SetColumn(messageLabel, 1);
+
+            toastLayout.Children.Add(iconLabel);
+            toastLayout.Children.Add(messageLabel);
+
+            toastFrame.Content = toastLayout;
+
+            // Get the root grid from XAML
+            if (this.Content is Grid rootGrid)
+            {
+                // Add toast to root grid
+                Grid.SetRowSpan(toastFrame, rootGrid.RowDefinitions.Count);
+                rootGrid.Children.Add(toastFrame);
+
+                // Animate toast appearance
+                await Task.WhenAll(
+                    toastFrame.FadeTo(1, 300, Easing.CubicOut),
+                    toastFrame.TranslateTo(0, 0, 300, Easing.CubicOut)
+                );
+
+                // Wait for 3 seconds
+                await Task.Delay(3000);
+
+                // Animate toast disappearance
+                await Task.WhenAll(
+                    toastFrame.FadeTo(0, 300, Easing.CubicIn),
+                    toastFrame.TranslateTo(0, 100, 300, Easing.CubicIn)
+                );
+
+                // Remove toast from grid
+                rootGrid.Children.Remove(toastFrame);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Toast error: {ex.Message}");
         }
     }
     #endregion
