@@ -9,9 +9,13 @@ public partial class LoginPage : ContentPage
     private readonly Random random = new Random();
     private readonly HttpClient httpClient;
 
-
     // Track which login type is currently selected
     private LoginType selectedLoginType = LoginType.UnitLogin;
+
+    // Keyboard handling properties
+    private bool isKeyboardVisible = false;
+    private double keyboardHeight = 0;
+    private View? currentFocusedView = null;
 
     // WARNING: Only set this to 'true' for development/testing when the server uses a self-signed certificate.
     // Do NOT use certificate bypass in production.
@@ -24,7 +28,6 @@ public partial class LoginPage : ContentPage
 
         if (bypassCertificateValidation)
         {
-            // In dev, bypass certificate validation (self-signed). Do NOT use in production.
             var handler = new HttpClientHandler
             {
                 ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
@@ -36,11 +39,168 @@ public partial class LoginPage : ContentPage
             httpClient = new HttpClient();
         }
 
-        // Set timeout
         httpClient.Timeout = TimeSpan.FromSeconds(30);
-
-        // Set initial tab state (Unit Login is selected by default)
         UpdateTabUI();
+
+        // Subscribe to keyboard visibility changes
+        SubscribeToKeyboardEvents();
+    }
+
+    private void SubscribeToKeyboardEvents()
+    {
+        // Subscribe to soft input visibility changes
+        Microsoft.Maui.Controls.Application.Current!.RequestedThemeChanged += (s, e) => { };
+
+        // For better keyboard handling on Android
+#if ANDROID
+        var page = this;
+        page.SizeChanged += OnPageSizeChanged;
+#endif
+    }
+
+    private void OnPageSizeChanged(object? sender, EventArgs e)
+    {
+        // This helps detect keyboard show/hide on Android
+        if (currentFocusedView != null && isKeyboardVisible)
+        {
+            _ = ScrollToView(currentFocusedView);
+        }
+    }
+
+    private void OnEntryFocused(object? sender, FocusEventArgs e)
+    {
+        if (sender is Entry entry)
+        {
+            isKeyboardVisible = true;
+
+            // Find the parent Border for the Entry
+            var parent = entry.Parent;
+            while (parent != null && parent is not Border)
+            {
+                parent = parent.Parent;
+            }
+
+            if (parent is Border border)
+            {
+                currentFocusedView = border;
+
+                // Highlight the focused field
+                border.Stroke = Color.FromArgb("#2E8B57");
+                border.StrokeThickness = 2;
+
+                // Delay to ensure keyboard is fully shown - increased delay for better timing
+                Device.StartTimer(TimeSpan.FromMilliseconds(400), () =>
+                {
+                    _ = ScrollToView(border);
+                    return false;
+                });
+            }
+        }
+    }
+
+    private void OnEntryUnfocused(object? sender, FocusEventArgs e)
+    {
+        if (sender is Entry entry)
+        {
+            // Find the parent Border for the Entry
+            var parent = entry.Parent;
+            while (parent != null && parent is not Border)
+            {
+                parent = parent.Parent;
+            }
+
+            if (parent is Border border)
+            {
+                // Reset border to normal state
+                border.Stroke = Color.FromArgb("#D0D0D0");
+                border.StrokeThickness = 1;
+            }
+        }
+
+        // Check if no other entry is focused
+        Device.StartTimer(TimeSpan.FromMilliseconds(100), () =>
+        {
+            if (UserIdEntry.IsFocused || PasswordEntry.IsFocused || CaptchaEntry.IsFocused)
+            {
+                return false;
+            }
+
+            isKeyboardVisible = false;
+            currentFocusedView = null;
+            return false;
+        });
+    }
+
+    private async Task ScrollToView(View view)
+    {
+        try
+        {
+            if (view == null || MainScrollView == null)
+                return;
+
+            // Get the position of the view relative to the ScrollView
+            var viewY = await GetViewYPosition(view);
+
+            // Get screen and keyboard dimensions
+            var screenHeight = DeviceDisplay.MainDisplayInfo.Height / DeviceDisplay.MainDisplayInfo.Density;
+            var scrollViewHeight = MainScrollView.Height;
+
+            // Estimate keyboard height - increased from 45% to 55% for more aggressive scrolling
+            var estimatedKeyboardHeight = screenHeight * 0.55;
+
+            // Calculate visible area when keyboard is shown
+            var visibleArea = scrollViewHeight - estimatedKeyboardHeight;
+
+            // Calculate the ideal scroll position
+            // Position field closer to top of visible area (30% from top instead of 50%)
+            var targetScrollY = viewY - (visibleArea * 0.3) + (view.Height / 2);
+
+            // Add extra offset to ensure field is well above keyboard
+            var extraOffset = 80; // Additional pixels to scroll
+            targetScrollY += extraOffset;
+
+            // Ensure we don't scroll beyond content bounds
+            targetScrollY = Math.Max(0, targetScrollY);
+
+            // Smooth scroll to the calculated position
+            await MainScrollView.ScrollToAsync(0, targetScrollY, true);
+
+            System.Diagnostics.Debug.WriteLine($"Scrolled to Y: {targetScrollY}, View Y: {viewY}, Visible Area: {visibleArea}, Extra Offset: {extraOffset}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error scrolling to view: {ex.Message}");
+        }
+    }
+
+    private async Task<double> GetViewYPosition(View view)
+    {
+        try
+        {
+            double y = 0;
+            var element = view as Element;
+
+            while (element != null && element != MainScrollView)
+            {
+                if (element is VisualElement visualElement)
+                {
+                    y += visualElement.Y;
+                }
+                element = element.Parent;
+            }
+
+            return y;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private void OnScrollViewScrolled(object? sender, ScrolledEventArgs e)
+    {
+        // Track scroll position if needed for future enhancements
+        System.Diagnostics.Debug.WriteLine($"ScrollView scrolled to Y: {e.ScrollY}");
     }
 
     private void GenerateCaptcha()
@@ -60,7 +220,6 @@ public partial class LoginPage : ContentPage
         CaptchaEntry.Text = "";
     }
 
-    // Bank Login Tab Click Handler
     private void OnBankLoginTabTapped(object sender, EventArgs e)
     {
         if (selectedLoginType != LoginType.BankLogin)
@@ -70,7 +229,6 @@ public partial class LoginPage : ContentPage
         }
     }
 
-    // Unit Login Tab Click Handler
     private void OnUnitLoginTabTapped(object sender, EventArgs e)
     {
         if (selectedLoginType != LoginType.UnitLogin)
@@ -80,49 +238,42 @@ public partial class LoginPage : ContentPage
         }
     }
 
-    // Update UI based on selected tab
-    // Update UI based on selected tab
     private void UpdateTabUI()
     {
         if (selectedLoginType == LoginType.BankLogin)
         {
-            // Bank Login is selected
             BankLoginTab.BackgroundColor = Color.FromArgb("#FF6B35");
             BankLoginTabLabel.TextColor = Colors.White;
 
             UnitLoginTab.BackgroundColor = Color.FromArgb("#B8D4C2");
             UnitLoginTabLabel.TextColor = Color.FromArgb("#FF6B35");
 
-            // Update button text
             LoginButton.Text = "BANK LOGIN";
-
-            // Update heading label
             HeadingLabel.Text = "Bank Pre-Verification Login";
         }
         else
         {
-            // Unit Login is selected
             UnitLoginTab.BackgroundColor = Color.FromArgb("#FF6B35");
             UnitLoginTabLabel.TextColor = Colors.White;
 
             BankLoginTab.BackgroundColor = Color.FromArgb("#B8D4C2");
             BankLoginTabLabel.TextColor = Color.FromArgb("#FF6B35");
 
-            // Update button text
             LoginButton.Text = "UNIT LOGIN";
-
-            // Update heading label
             HeadingLabel.Text = "Physical Verification Login";
         }
     }
 
     private async void OnLoginClicked(object sender, EventArgs e)
     {
-        // Prevent multiple simultaneous login attempts
         if (!LoginButton.IsEnabled)
             return;
 
-        // Basic validation
+        // Dismiss keyboard before login
+        UserIdEntry.Unfocus();
+        PasswordEntry.Unfocus();
+        CaptchaEntry.Unfocus();
+
         if (string.IsNullOrWhiteSpace(UserIdEntry.Text))
         {
             await DisplayAlert("Error", "Please enter User ID", "OK");
@@ -151,7 +302,6 @@ public partial class LoginPage : ContentPage
             return;
         }
 
-        // Set loading state
         SetLoadingState(true);
 
         try
@@ -164,53 +314,42 @@ public partial class LoginPage : ContentPage
 
                 if (response.Status)
                 {
-                    // ✨ NEW: Store the UserID that user entered
                     response.UserID = UserIdEntry.Text.Trim();
-                    // Successful login
-                    //await DisplayAlert("Success", response.Message ?? "Login successful!", "OK");
-
-                    // Navigate to dashboard only on success
                     var dashboardPage = new DashboardPage(response, showToast: true);
                     await Navigation.PushAsync(dashboardPage);
                 }
                 else
                 {
-                    // Login failed - show error and reset form
                     await DisplayAlert("Login Failed", response.Message ?? "Invalid credentials. Please try again.", "OK");
                     ResetFormAfterFailure();
                 }
             }
             else
             {
-                // Null response - unexpected error
                 await DisplayAlert("Error", "Unexpected server response. Please try again.", "OK");
                 ResetFormAfterFailure();
             }
         }
         catch (HttpRequestException ex)
         {
-            // Network/HTTP errors
             System.Diagnostics.Debug.WriteLine($"HTTP Error: {ex.Message}");
             await DisplayAlert("Network Error", "Unable to connect to server. Please check your internet connection and try again.", "OK");
             ResetCaptchaAfterFailure();
         }
         catch (TaskCanceledException ex)
         {
-            // Timeout errors
             System.Diagnostics.Debug.WriteLine($"Timeout Error: {ex.Message}");
             await DisplayAlert("Timeout", "Request timed out. Please try again.", "OK");
             ResetCaptchaAfterFailure();
         }
         catch (Exception ex)
         {
-            // Other unexpected errors
             System.Diagnostics.Debug.WriteLine($"Login Error: {ex.Message}");
             await DisplayAlert("Error", $"Login failed: {ex.Message}", "OK");
             ResetFormAfterFailure();
         }
         finally
         {
-            // Always reset loading state
             SetLoadingState(false);
         }
     }
@@ -221,7 +360,6 @@ public partial class LoginPage : ContentPage
                           (selectedLoginType == LoginType.BankLogin ? "BANK LOGIN" : "UNIT LOGIN");
         LoginButton.IsEnabled = !isLoading;
 
-        // Disable input fields during login to prevent changes
         UserIdEntry.IsEnabled = !isLoading;
         PasswordEntry.IsEnabled = !isLoading;
         CaptchaEntry.IsEnabled = !isLoading;
@@ -237,12 +375,9 @@ public partial class LoginPage : ContentPage
 
     private void ResetFormAfterFailure()
     {
-        // Clear sensitive fields and reset captcha
         PasswordEntry.Text = "";
         GenerateCaptcha();
         CaptchaEntry.Text = "";
-
-        // Focus on user ID for retry
         UserIdEntry.Focus();
     }
 
@@ -250,35 +385,25 @@ public partial class LoginPage : ContentPage
     {
         try
         {
-            // Build the inner credentials JSON
             var creds = new { UserID = userId, Password = password };
             var innerJson = JsonSerializer.Serialize(creds);
-
-            // Base64 encode
             var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(innerJson));
-
-            // Build outer request: { "data": "<base64>" }
             var outer = new { data = base64 };
             var outerJson = JsonSerializer.Serialize(outer);
-
             var content = new StringContent(outerJson, Encoding.UTF8, "application/json");
 
-            // Select API URL based on login type
             string apiUrl = selectedLoginType == LoginType.BankLogin
                 ? "https://115.124.125.153/MobileApp/AuthenticateBankLogin"
                 : "https://115.124.125.153/MobileApp/AuthenticatePVLogin";
 
             System.Diagnostics.Debug.WriteLine($"Calling API: {apiUrl}");
 
-            // Clear and set headers
             httpClient.DefaultRequestHeaders.Clear();
             httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
 
-            // Make API call
             HttpResponseMessage res = await httpClient.PostAsync(apiUrl, content);
             var responseContent = await res.Content.ReadAsStringAsync();
 
-            // Log API response for debugging
             Console.WriteLine($"API Raw Response: {responseContent}");
             System.Diagnostics.Debug.WriteLine($"API Raw Response: {responseContent}");
 
@@ -298,7 +423,6 @@ public partial class LoginPage : ContentPage
             }
             else
             {
-                // Try to parse error response
                 try
                 {
                     var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -308,10 +432,8 @@ public partial class LoginPage : ContentPage
                 }
                 catch (JsonException)
                 {
-                    // Ignore JSON parsing errors for error responses
                 }
 
-                // Throw exception with server error details
                 throw new HttpRequestException($"Server returned {(int)res.StatusCode} {res.ReasonPhrase}");
             }
         }
@@ -322,12 +444,10 @@ public partial class LoginPage : ContentPage
         }
         catch (HttpRequestException)
         {
-            // Re-throw HTTP exceptions as-is
             throw;
         }
         catch (TaskCanceledException)
         {
-            // Re-throw timeout exceptions as-is
             throw;
         }
         catch (Exception ex)
@@ -347,32 +467,29 @@ public partial class LoginPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+
+        // Unsubscribe from events
+#if ANDROID
+        this.SizeChanged -= OnPageSizeChanged;
+#endif
+
         httpClient?.Dispose();
     }
 
-    // Enum to track login type
     private enum LoginType
     {
         BankLogin,
         UnitLogin
     }
 
-    // Updated LoginResponse class to match API response structure
     public class LoginResponse
     {
-        // Common fields
         public bool Status { get; set; }
         public string? Message { get; set; }
-
-        // Unit Login specific fields
         public int PhysicalVeriID { get; set; }
-
-        // Bank Login specific fields
         public int BankLoginID { get; set; }
         public string? IFSC_Code { get; set; }
         public string? UserID { get; set; }
-
-        // Helper property to identify login type
         public bool IsBankLogin => !string.IsNullOrEmpty(IFSC_Code);
     }
 }

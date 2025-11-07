@@ -4165,7 +4165,7 @@ namespace PMEGP_Physical_V
                 BackgroundColor = surfaceColor,
                 Stroke = outlineColor,
                 StrokeThickness = 1.5,
-                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                StrokeShape = new RoundRectangle { CornerRadius = 5 },
                 Padding = new Thickness(16, 8, 16, 8),
                 MinimumHeightRequest = 100,
                 Shadow = !isReadOnly ? new Shadow
@@ -4552,7 +4552,8 @@ namespace PMEGP_Physical_V
                 Placeholder = "Enter your remarks here...",
                 FontSize = 16,
                 HeightRequest = 120,
-                BackgroundColor = Color.FromArgb("#F5F5F5")
+                BackgroundColor = Color.FromArgb("#F5F5F5"),
+                TextColor = Colors.Black
             };
 
             var buttonGrid = new Grid

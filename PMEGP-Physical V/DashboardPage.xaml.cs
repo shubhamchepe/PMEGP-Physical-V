@@ -66,6 +66,7 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
     private bool _isLoading = false;
     private bool _isDisposed = false;
     private readonly bool _showToastOnLoad = false;
+    private bool _hasShownToast = false;
     #endregion
 
     #region Constructor
@@ -111,9 +112,10 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
             await LoadDashboardDataAsync();
 
             // ✅ Show toast after data loads
-            if (_showToastOnLoad)
+            if (_showToastOnLoad && !_hasShownToast)
             {
                 ShowToast("Login successful!");
+                _hasShownToast = true;
             }
         }
     }
@@ -699,6 +701,7 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
         try
         {
             _isDisposed = true;
+            _hasShownToast = false;
             _httpClient?.Dispose();
             await Navigation.PopToRootAsync();
             await Navigation.PushAsync(new LoginPage());

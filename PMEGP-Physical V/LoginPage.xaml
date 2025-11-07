@@ -6,8 +6,9 @@
              NavigationPage.HasNavigationBar="False"
              BackgroundColor="#C0C0C0">
 
-    <ScrollView>
-        <Grid>
+    <ScrollView x:Name="MainScrollView" 
+                Scrolled="OnScrollViewScrolled">
+        <Grid Padding="0,0,0,20">
             <Grid.RowDefinitions>
                 <RowDefinition Height="80" />
                 <RowDefinition Height="Auto" />
@@ -17,7 +18,6 @@
 
             <!-- Tab Buttons Container -->
             <Grid Grid.Row="1" Margin="30,10,30,10">
-                <!-- Rest of your tab code remains the same -->
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -71,7 +71,6 @@
                     StrokeShape="RoundRectangle 12" 
                     Margin="30,0,30,0" 
                     VerticalOptions="Start">
-                <!-- Rest of your login form remains exactly the same -->
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="5" />
@@ -102,7 +101,8 @@
                         <!-- Input Fields Container -->
                         <StackLayout Padding="20" Spacing="20">
                             <!-- User ID Input -->
-                            <Border BackgroundColor="#E8E8E8" 
+                            <Border x:Name="UserIdBorder"
+                                    BackgroundColor="#E8E8E8" 
                                     StrokeThickness="1" 
                                     Stroke="#D0D0D0" 
                                     StrokeShape="RoundRectangle 8" 
@@ -121,7 +121,9 @@
                                            PlaceholderColor="#888888" 
                                            FontSize="16" 
                                            Margin="15,0,0,0" 
-                                           Visual="Material" />
+                                           Visual="Material"
+                                           Focused="OnEntryFocused"
+                                           Unfocused="OnEntryUnfocused" />
                                     <Image Grid.Column="1" 
                                            Source="user.png" 
                                            WidthRequest="24" 
@@ -132,7 +134,8 @@
                             </Border>
 
                             <!-- Password Input -->
-                            <Border BackgroundColor="#E8E8E8" 
+                            <Border x:Name="PasswordBorder"
+                                    BackgroundColor="#E8E8E8" 
                                     StrokeThickness="1" 
                                     Stroke="#D0D0D0" 
                                     StrokeShape="RoundRectangle 8" 
@@ -153,7 +156,9 @@
                                            FontSize="16" 
                                            Margin="15,0,0,0" 
                                            Visual="Material" 
-                                           ClearButtonVisibility="Never" />
+                                           ClearButtonVisibility="Never"
+                                           Focused="OnEntryFocused"
+                                           Unfocused="OnEntryUnfocused" />
                                     <Image Grid.Column="1" 
                                            Source="password.png" 
                                            WidthRequest="24" 
@@ -164,7 +169,8 @@
                             </Border>
 
                             <!-- CAPTCHA Display (Non-editable) -->
-                            <Border BackgroundColor="#E8E8E8" 
+                            <Border x:Name="CaptchaDisplayBorder"
+                                    BackgroundColor="#E8E8E8" 
                                     StrokeThickness="1" 
                                     Stroke="#D0D0D0" 
                                     StrokeShape="RoundRectangle 8" 
@@ -197,7 +203,8 @@
                             </Border>
 
                             <!-- CAPTCHA Input -->
-                            <Border BackgroundColor="#E8E8E8" 
+                            <Border x:Name="CaptchaInputBorder"
+                                    BackgroundColor="#E8E8E8" 
                                     StrokeThickness="1" 
                                     Stroke="#D0D0D0" 
                                     StrokeShape="RoundRectangle 8" 
@@ -211,7 +218,9 @@
                                        FontSize="16" 
                                        Margin="15,0" 
                                        Visual="Material" 
-                                       ClearButtonVisibility="Never" />
+                                       ClearButtonVisibility="Never"
+                                       Focused="OnEntryFocused"
+                                       Unfocused="OnEntryUnfocused" />
                             </Border>
 
                             <!-- Bottom Buttons -->
