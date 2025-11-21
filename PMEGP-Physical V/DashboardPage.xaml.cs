@@ -687,13 +687,11 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
             if (_isDisposed)
                 return;
 
-            bool result = await DisplayAlert("Exit", "Do you want to logout?", "Yes", "No");
-            if (result)
-            {
-                await PerformLogout();
-            }
+            // Simply go back to PrePostVerificationPage without asking
+            await Navigation.PopAsync();
         });
-        return true;
+
+        return true; // Prevent default back button behavior
     }
 
     private async Task PerformLogout()

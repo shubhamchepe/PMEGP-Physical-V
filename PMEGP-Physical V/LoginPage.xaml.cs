@@ -89,7 +89,8 @@ public partial class LoginPage : ContentPage
                 border.StrokeThickness = 2;
 
                 // Delay to ensure keyboard is fully shown - increased delay for better timing
-                Device.StartTimer(TimeSpan.FromMilliseconds(400), () =>
+                // Delay to ensure keyboard is fully shown
+                Device.StartTimer(TimeSpan.FromMilliseconds(500), () =>
                 {
                     _ = ScrollToView(border);
                     return false;
@@ -143,29 +144,29 @@ public partial class LoginPage : ContentPage
 
             // Get screen and keyboard dimensions
             var screenHeight = DeviceDisplay.MainDisplayInfo.Height / DeviceDisplay.MainDisplayInfo.Density;
-            var scrollViewHeight = MainScrollView.Height;
 
-            // Estimate keyboard height - increased from 45% to 55% for more aggressive scrolling
-            var estimatedKeyboardHeight = screenHeight * 0.55;
+            // Estimate keyboard height (60% of screen for better coverage)
+            var estimatedKeyboardHeight = screenHeight * 0.60;
 
-            // Calculate visible area when keyboard is shown
-            var visibleArea = scrollViewHeight - estimatedKeyboardHeight;
+            // Calculate target position: move field to near top of visible area
+            // Multiply viewY by 2 for "twice the height" effect + extra spacing
+            var targetScrollY = viewY + (view.Height * 2) + 100;
 
-            // Calculate the ideal scroll position
-            // Position field closer to top of visible area (30% from top instead of 50%)
-            var targetScrollY = viewY - (visibleArea * 0.3) + (view.Height / 2);
+            // Alternative calculation for more aggressive scrolling:
+            // Position the field much higher (only 15% from top of visible area)
+            var visibleArea = screenHeight - estimatedKeyboardHeight;
+            var alternativeTargetY = viewY - (visibleArea * 0.15);
 
-            // Add extra offset to ensure field is well above keyboard
-            var extraOffset = 80; // Additional pixels to scroll
-            targetScrollY += extraOffset;
+            // Use the higher scroll value for maximum upward movement
+            targetScrollY = Math.Max(targetScrollY, alternativeTargetY);
 
-            // Ensure we don't scroll beyond content bounds
+            // Ensure we don't scroll beyond reasonable bounds
             targetScrollY = Math.Max(0, targetScrollY);
 
             // Smooth scroll to the calculated position
             await MainScrollView.ScrollToAsync(0, targetScrollY, true);
 
-            System.Diagnostics.Debug.WriteLine($"Scrolled to Y: {targetScrollY}, View Y: {viewY}, Visible Area: {visibleArea}, Extra Offset: {extraOffset}");
+            System.Diagnostics.Debug.WriteLine($"Scrolled to Y: {targetScrollY}, View Y: {viewY}");
         }
         catch (Exception ex)
         {
@@ -315,8 +316,20 @@ public partial class LoginPage : ContentPage
                 if (response.Status)
                 {
                     response.UserID = UserIdEntry.Text.Trim();
-                    var dashboardPage = new DashboardPage(response, showToast: true);
-                    await Navigation.PushAsync(dashboardPage);
+
+                    // ✅ CHANGED: Check login type to determine navigation
+                    if (response.IsBankLogin)
+                    {
+                        // Bank Login → Navigate directly to DashboardPage
+                        var dashboardPage = new DashboardPage(response, showToast: true);
+                        await Navigation.PushAsync(dashboardPage);
+                    }
+                    else
+                    {
+                        // Unit Login → Navigate to PrePostVerificationPage
+                        var prePostVerificationPage = new PrePostVerificationPage(response, showToast: true);
+                        await Navigation.PushAsync(prePostVerificationPage);
+                    }
                 }
                 else
                 {

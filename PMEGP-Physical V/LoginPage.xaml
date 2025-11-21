@@ -10,10 +10,10 @@
                 Scrolled="OnScrollViewScrolled">
         <Grid Padding="0,0,0,20">
             <Grid.RowDefinitions>
-                <RowDefinition Height="80" />
+                <RowDefinition Height="40" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="80" />
+                <RowDefinition Height="200" />
             </Grid.RowDefinitions>
 
             <!-- Tab Buttons Container -->

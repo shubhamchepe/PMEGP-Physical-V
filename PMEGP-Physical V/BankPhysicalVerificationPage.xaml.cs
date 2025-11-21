@@ -2,7 +2,6 @@
 using Microsoft.Maui.Layouts;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using IOPath = System.IO.Path;
 
 namespace PMEGP_Physical_V
 {
@@ -127,6 +126,7 @@ namespace PMEGP_Physical_V
         private List<ImageButton> _stepButtons = new List<ImageButton>();
         private List<BoxView> _connectorLines = new List<BoxView>();
         private AbsoluteLayout _currentModal = null;
+        private int? _verificationStatus = null;
 
         private BankPhysicalVerificationApiResponse _apiData = null;
         private readonly HttpClient _httpClient;
@@ -613,15 +613,27 @@ namespace PMEGP_Physical_V
                 form.Children.Add(CreateMultilineEntry("Observation of premises*", _apiData.PhyVerificationModel?.ObsOfPremises ?? "", false, _isEditable));
 
                 // 19. DOP Person Name
-                form.Children.Add(CreateFormEntry("DOP Person Name*", _apiData.PhyVerificationModel?.DOPPersonName ?? "", false, false, _isEditable));
+                // 19. Verification Status
+                form.Children.Add(CreateVerificationStatusRadioButtons());
             }
 
             string nextButtonText = _isEditable ? "SAVE & NEXT" : "NEXT";
-            var nextButton = CreateNavigationButton(nextButtonText, Color.FromArgb("#4CAF50"), async () =>
+            var buttonColor = _isEditable && !_verificationStatus.HasValue
+                ? Color.FromArgb("#CCCCCC")
+                : Color.FromArgb("#4CAF50");
+
+            var nextButton = CreateNavigationButton(nextButtonText, buttonColor, async () =>
             {
                 if (_isEditable) await SaveApplicantDetailsData();
                 await NavigateToStep(2);
             });
+
+            if (_isEditable && !_verificationStatus.HasValue)
+            {
+                nextButton.IsEnabled = false;
+                nextButton.Opacity = 0.6;
+            }
+
             form.Children.Add(nextButton);
 
             ContentContainer.Children.Add(form);
@@ -698,6 +710,279 @@ namespace PMEGP_Physical_V
             form.Children.Add(navigationButtons);
 
             ContentContainer.Children.Add(form);
+        }
+
+        private Grid CreateVerificationStatusRadioButtons()
+        {
+            var grid = new Grid
+            {
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+
+            var primaryColor = Color.FromArgb("#1976D2");
+            var surfaceColor = _isEditable ? Colors.White : Color.FromArgb("#F5F5F5");
+            var outlineColor = _isEditable ? Color.FromArgb("#1976D2") : Color.FromArgb("#BDBDBD");
+
+            var container = new Border
+            {
+                BackgroundColor = surfaceColor,
+                Stroke = outlineColor,
+                StrokeThickness = 1.5,
+                StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                Padding = new Thickness(16, 12, 16, 12),
+                MinimumHeightRequest = 80,
+                Shadow = _isEditable ? new Shadow
+                {
+                    Brush = new SolidColorBrush(Color.FromArgb("#40000000")),
+                    Opacity = 0.15f,
+                    Radius = 4,
+                    Offset = new Point(0, 2)
+                } : null
+            };
+
+            var mainStack = new VerticalStackLayout
+            {
+                Spacing = 12
+            };
+
+            var label = new Label
+            {
+                Text = "Verification Status*",
+                FontSize = 12,
+                TextColor = _isEditable ? primaryColor : Color.FromArgb("#9E9E9E"),
+                FontAttributes = FontAttributes.Bold
+            };
+
+            var radioStack = new HorizontalStackLayout
+            {
+                Spacing = 30,
+                HorizontalOptions = LayoutOptions.Start
+            };
+
+            // Successful Radio Button
+            var successfulFrame = new Frame
+            {
+                BackgroundColor = Colors.Transparent,
+                BorderColor = Colors.Transparent,
+                Padding = new Thickness(5),
+                HasShadow = false,
+                IsEnabled = _isEditable
+            };
+
+            var successfulStack = new HorizontalStackLayout
+            {
+                Spacing = 10
+            };
+
+            var successfulRadio = new RadioButton
+            {
+                GroupName = "VerificationStatus",
+                Value = "1",
+                IsEnabled = _isEditable,
+                WidthRequest = 24,
+                HeightRequest = 24
+            };
+
+            // Apply custom styling for Successful Radio Button
+            if (_isEditable)
+            {
+                successfulRadio.ControlTemplate = new ControlTemplate(() =>
+                {
+                    var outerBorder = new Border
+                    {
+                        Stroke = Color.FromArgb("#424242"),
+                        StrokeThickness = 2,
+                        StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                        BackgroundColor = Colors.Transparent,
+                        WidthRequest = 24,
+                        HeightRequest = 24,
+                        HorizontalOptions = LayoutOptions.Center,
+                        VerticalOptions = LayoutOptions.Center
+                    };
+
+                    var innerCircle = new BoxView
+                    {
+                        Color = Color.FromArgb("#1976D2"),
+                        WidthRequest = 12,
+                        HeightRequest = 12,
+                        CornerRadius = 6,
+                        HorizontalOptions = LayoutOptions.Center,
+                        VerticalOptions = LayoutOptions.Center,
+                        IsVisible = false
+                    };
+
+                    innerCircle.SetBinding(BoxView.IsVisibleProperty, new Binding("IsChecked", source: RelativeBindingSource.TemplatedParent));
+
+                    var grid = new Grid();
+                    grid.Children.Add(outerBorder);
+                    grid.Children.Add(innerCircle);
+
+                    return grid;
+                });
+            }
+
+            var successfulLabel = new Label
+            {
+                Text = "Successful",
+                FontSize = 12,
+                TextColor = _isEditable ? Color.FromArgb("#1C1B1F") : Color.FromArgb("#79747E"),
+                VerticalOptions = LayoutOptions.Center,
+                FontAttributes = FontAttributes.Bold
+            };
+
+            // Make the entire frame tappable for Successful
+            var successfulTapGesture = new TapGestureRecognizer();
+            successfulTapGesture.Tapped += (s, e) =>
+            {
+                if (_isEditable)
+                {
+                    successfulRadio.IsChecked = true;
+                }
+            };
+            successfulFrame.GestureRecognizers.Add(successfulTapGesture);
+
+            successfulStack.Children.Add(successfulRadio);
+            successfulStack.Children.Add(successfulLabel);
+            successfulFrame.Content = successfulStack;
+
+            // Unsuccessful Radio Button
+            var unsuccessfulFrame = new Frame
+            {
+                BackgroundColor = Colors.Transparent,
+                BorderColor = Colors.Transparent,
+                Padding = new Thickness(5),
+                HasShadow = false,
+                IsEnabled = _isEditable
+            };
+
+            var unsuccessfulStack = new HorizontalStackLayout
+            {
+                Spacing = 10
+            };
+
+            var unsuccessfulRadio = new RadioButton
+            {
+                GroupName = "VerificationStatus",
+                Value = "0",
+                IsEnabled = _isEditable,
+                WidthRequest = 24,
+                HeightRequest = 24
+            };
+
+            // Apply custom styling for Unsuccessful Radio Button
+            if (_isEditable)
+            {
+                unsuccessfulRadio.ControlTemplate = new ControlTemplate(() =>
+                {
+                    var outerBorder = new Border
+                    {
+                        Stroke = Color.FromArgb("#424242"),
+                        StrokeThickness = 2,
+                        StrokeShape = new RoundRectangle { CornerRadius = 12 },
+                        BackgroundColor = Colors.Transparent,
+                        WidthRequest = 24,
+                        HeightRequest = 24,
+                        HorizontalOptions = LayoutOptions.Center,
+                        VerticalOptions = LayoutOptions.Center
+                    };
+
+                    var innerCircle = new BoxView
+                    {
+                        Color = Color.FromArgb("#1976D2"),
+                        WidthRequest = 12,
+                        HeightRequest = 12,
+                        CornerRadius = 6,
+                        HorizontalOptions = LayoutOptions.Center,
+                        VerticalOptions = LayoutOptions.Center,
+                        IsVisible = false
+                    };
+
+                    innerCircle.SetBinding(BoxView.IsVisibleProperty, new Binding("IsChecked", source: RelativeBindingSource.TemplatedParent));
+
+                    var grid = new Grid();
+                    grid.Children.Add(outerBorder);
+                    grid.Children.Add(innerCircle);
+
+                    return grid;
+                });
+            }
+
+            var unsuccessfulLabel = new Label
+            {
+                Text = "Un-Successful",
+                FontSize = 12,
+                TextColor = _isEditable ? Color.FromArgb("#1C1B1F") : Color.FromArgb("#79747E"),
+                VerticalOptions = LayoutOptions.Center,
+                FontAttributes = FontAttributes.Bold
+            };
+
+            // Make the entire frame tappable for Unsuccessful
+            var unsuccessfulTapGesture = new TapGestureRecognizer();
+            unsuccessfulTapGesture.Tapped += (s, e) =>
+            {
+                if (_isEditable)
+                {
+                    unsuccessfulRadio.IsChecked = true;
+                }
+            };
+            unsuccessfulFrame.GestureRecognizers.Add(unsuccessfulTapGesture);
+
+            unsuccessfulStack.Children.Add(unsuccessfulRadio);
+            unsuccessfulStack.Children.Add(unsuccessfulLabel);
+            unsuccessfulFrame.Content = unsuccessfulStack;
+
+            // Event Handlers
+            successfulRadio.CheckedChanged += (s, e) =>
+            {
+                if (e.Value)
+                {
+                    _verificationStatus = 1;
+                    _formState["VerificationStatus"] = 1;
+                    UpdateSaveButtonState();
+                }
+            };
+
+            unsuccessfulRadio.CheckedChanged += (s, e) =>
+            {
+                if (e.Value)
+                {
+                    _verificationStatus = 0;
+                    _formState["VerificationStatus"] = 0;
+                    UpdateSaveButtonState();
+                }
+            };
+
+            radioStack.Children.Add(successfulFrame);
+            radioStack.Children.Add(unsuccessfulFrame);
+
+            mainStack.Children.Add(label);
+            mainStack.Children.Add(radioStack);
+
+            container.Content = mainStack;
+            grid.Children.Add(container);
+
+            return grid;
+        }
+        private void UpdateSaveButtonState()
+        {
+            // Find the SAVE & NEXT button in ContentContainer and update its state
+            foreach (var child in ContentContainer.Children)
+            {
+                if (child is StackLayout stack)
+                {
+                    foreach (var item in stack.Children)
+                    {
+                        if (item is Button button && button.Text == "SAVE & NEXT")
+                        {
+                            button.IsEnabled = _verificationStatus.HasValue;
+                            button.BackgroundColor = _verificationStatus.HasValue
+                                ? Color.FromArgb("#4CAF50")
+                                : Color.FromArgb("#CCCCCC");
+                            button.Opacity = _verificationStatus.HasValue ? 1.0 : 0.6;
+                        }
+                    }
+                }
+            }
         }
 
         private Frame CreateSectionTitleWithButton(string title, string icon, bool showButton)
@@ -840,12 +1125,8 @@ namespace PMEGP_Physical_V
                 BackgroundColor = Colors.White,
                 HeightRequest = 50
             };
-            docTypePicker.Items.Add("Unit Photo");
-            docTypePicker.Items.Add("Product Photo");
-            docTypePicker.Items.Add("Bank Document");
-            docTypePicker.Items.Add("PMEGP SignBoard Photo");
-            docTypePicker.Items.Add("Declaration Photo");
-            docTypePicker.Items.Add("Manufacturing");
+            docTypePicker.Items.Add("Photo of Land with Applicant");
+            docTypePicker.Items.Add("Photo of Land Documents");
             docTypePicker.Items.Add("Others");
 
             var docNameEntry = new Entry
@@ -1308,9 +1589,15 @@ namespace PMEGP_Physical_V
                     _formState.ContainsKey("Observationofpremises") ? _formState["Observationofpremises"].ToString() :
                     _apiData.PhyVerificationModel?.ObsOfPremises ?? "", false, false, true));
 
-                summary.Children.Add(CreateFormEntry("DOP Person Name*",
-                    _formState.ContainsKey("DOPPersonName") ? _formState["DOPPersonName"].ToString() :
-                    _apiData.PhyVerificationModel?.DOPPersonName ?? "", false, false, false, true));
+                // Verification Status
+                string verificationStatusText = "Not Selected";
+                if (_formState.ContainsKey("VerificationStatus"))
+                {
+                    var status = _formState["VerificationStatus"];
+                    verificationStatusText = status?.ToString() == "1" ? "Successful" :
+                                            status?.ToString() == "0" ? "Un-Successful" : "Not Selected";
+                }
+                summary.Children.Add(CreateFormEntry("Verification Status*", verificationStatusText, false, false, false, true));
             }
 
             return summary;
@@ -1457,7 +1744,7 @@ namespace PMEGP_Physical_V
                     InfraReqPower = FindEditorValue("InfrastructureRequirements-Power"),
                     InfraReqSpace = FindEditorValue("InfrastructureRequirements-Space"),
                     ObsOfPremises = FindEditorValue("Observationofpremises"),
-                    DOPPersonName = FindEntryValue("DOPPersonName")
+                    VerificationStatus = _verificationStatus
                 };
 
                 await CallSaveApi("https://115.124.125.153/MobileApp/Insert_BankPVData", payload);
