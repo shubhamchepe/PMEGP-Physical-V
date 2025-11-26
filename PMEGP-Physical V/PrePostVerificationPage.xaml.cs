@@ -211,10 +211,17 @@ public partial class PrePostVerificationPage : ContentPage, INotifyPropertyChang
             }
             else if (selectedItem.Category == "pre_verification")
             {
-                // For Pre-Verification, you can show a message or navigate to another page
-                await DisplayAlert("Pre-Verification",
-                    "Pre-Verification functionality will be implemented here.",
-                    "OK");
+                // Call API and navigate to DashboardPage with Pre-Verification data
+                var preVerData = await FetchPreVerificationDataAsync();
+
+                var dashboardPage = new DashboardPage(
+                    _loginResponse,
+                    showToast: false,
+                    isPreVerMode: true,
+                    preVerData: preVerData
+                );
+
+                await Navigation.PushAsync(dashboardPage);
             }
         }
         catch (Exception ex)
@@ -226,6 +233,18 @@ public partial class PrePostVerificationPage : ContentPage, INotifyPropertyChang
                     "OK");
             }
         }
+    }
+
+    private async Task<DashboardPage.PreVerificationApiResponse> FetchPreVerificationDataAsync()
+    {
+        // Hard-coded response for now
+        await Task.Delay(500); // Simulate network call
+
+        return new DashboardPage.PreVerificationApiResponse
+        {
+            Pending = 12,
+            Completed = 8
+        };
     }
 
     private async void OnLogoutClicked(object sender, EventArgs e)

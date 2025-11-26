@@ -1,0 +1,547 @@
+﻿using Microsoft.Maui.Layouts;
+
+namespace PMEGP_Physical_V
+{
+    public class PreVerApplicant
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
+        public string DateOfSubmission { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty; // ADD THIS LINE
+    }
+
+    public partial class DetailsPagePreVer : ContentPage
+    {
+        private readonly string _status;
+        private double screenWidth;
+        private double screenHeight;
+        private double scaleFactor;
+        private bool isSmallScreen;
+        private bool isTablet;
+        private List<PreVerApplicant> _allApplicants = new List<PreVerApplicant>();
+
+        public DetailsPagePreVer(string status)
+        {
+            InitializeComponent();
+            _status = status;
+
+            InitializeResponsiveDesign();
+            LoadHardcodedData();
+
+            if (SearchEntry != null)
+            {
+                SearchEntry.TextChanged += OnSearchTextChanged;
+            }
+        }
+
+        private void InitializeResponsiveDesign()
+        {
+            var displayInfo = DeviceDisplay.MainDisplayInfo;
+            screenWidth = displayInfo.Width / displayInfo.Density;
+            screenHeight = displayInfo.Height / displayInfo.Density;
+            UpdateResponsiveProperties(screenWidth, screenHeight);
+        }
+
+        private void UpdateResponsiveProperties(double width, double height)
+        {
+            screenWidth = width;
+            screenHeight = height;
+            scaleFactor = Math.Max(0.7, Math.Min(1.3, screenWidth / 400.0));
+            isSmallScreen = screenWidth < 500;
+            isTablet = screenWidth >= 600;
+        }
+
+        private void LoadHardcodedData()
+        {
+            _allApplicants = new List<PreVerApplicant>
+    {
+        new PreVerApplicant
+        {
+            Id = "MH001",
+            Name = "Rajesh Kumar",
+            Address = "123 Main Street, Pune, Maharashtra, 411001",
+            DateOfSubmission = "15-01-2025",
+            Status = _status == "Pending" ? "Pending" : "Completed",
+            PhoneNumber = "9876543210" // ADD PHONE NUMBER
+        },
+        new PreVerApplicant
+        {
+            Id = "MH002",
+            Name = "Priya Sharma",
+            Address = "456 Park Avenue, Mumbai, Maharashtra, 400001",
+            DateOfSubmission = "18-01-2025",
+            Status = _status == "Pending" ? "Pending" : "Completed",
+            PhoneNumber = "9876543211" // ADD PHONE NUMBER
+        },
+        new PreVerApplicant
+        {
+            Id = "MH003",
+            Name = "Amit Patel",
+            Address = "789 Garden Road, Nagpur, Maharashtra, 440001",
+            DateOfSubmission = "20-01-2025",
+            Status = _status == "Pending" ? "Pending" : "Completed",
+            PhoneNumber = "9876543212" // ADD PHONE NUMBER
+        }
+    };
+
+            DisplayApplicants(_allApplicants);
+        }
+
+        private void DisplayApplicants(List<PreVerApplicant> applicants)
+        {
+            ApplicantsContainer.IsVisible = true;
+
+            if (ApplicantsContainer == null) return;
+
+            ApplicantsContainer.Children.Clear();
+            ApplicantsContainer.RowDefinitions.Clear();
+            ApplicantsContainer.RowSpacing = GetResponsiveSpacing(isSmallScreen ? 8 : 12);
+
+            for (int i = 0; i < applicants.Count; i++)
+            {
+                ApplicantsContainer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                var applicantCard = CreateApplicantCard(applicants[i]);
+                Grid.SetRow(applicantCard, i);
+                ApplicantsContainer.Children.Add(applicantCard);
+            }
+        }
+
+        private Frame CreateApplicantCard(PreVerApplicant applicant)
+        {
+            var cardFrame = new Frame
+            {
+                BackgroundColor = Colors.White,
+                BorderColor = Colors.Transparent,
+                CornerRadius = (float)(isSmallScreen ? 6 : 8),
+                Padding = 0,
+                Margin = GetResponsivePadding(0),
+                HasShadow = false
+            };
+
+            var mainGrid = new Grid();
+            var borderWidth = GetResponsiveSpacing(isSmallScreen ? 6 : 8);
+            mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(borderWidth) });
+            mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var leftBorder = new BoxView
+            {
+                BackgroundColor = Color.FromArgb("#FF6B35"),
+                VerticalOptions = LayoutOptions.Fill,
+                HorizontalOptions = LayoutOptions.Fill
+            };
+            Grid.SetColumn(leftBorder, 0);
+
+            var contentContainer = new Grid();
+            Grid.SetColumn(contentContainer, 1);
+
+            var contentGrid = new Grid
+            {
+                Padding = GetResponsivePadding(isSmallScreen ? 12 : 15, isSmallScreen ? 10 : 15),
+                RowSpacing = GetResponsiveSpacing(isSmallScreen ? 6 : 8)
+            };
+
+            for (int i = 0; i < 5; i++) // Changed from 4 to 5 to accommodate buttons
+            {
+                contentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            }
+
+            var idRow = CreateDetailRow("Applicant Id :", applicant.Id);
+            var nameRow = CreateDetailRow("Name :", applicant.Name);
+            var addressRow = CreateDetailRow("Address :", applicant.Address);
+            var dateRow = CreateDetailRow("Date Of Submission :", applicant.DateOfSubmission);
+
+            Grid.SetRow(idRow, 0);
+            Grid.SetRow(nameRow, 1);
+            Grid.SetRow(addressRow, 2);
+            Grid.SetRow(dateRow, 3);
+
+            contentGrid.Children.Add(idRow);
+            contentGrid.Children.Add(nameRow);
+            contentGrid.Children.Add(addressRow);
+            contentGrid.Children.Add(dateRow);
+
+            // Add action buttons
+            var buttonsGrid = CreateActionButtonsGrid(applicant);
+            buttonsGrid.Margin = new Thickness(0, GetResponsiveSpacing(isSmallScreen ? 10 : 15), 0, 0);
+            Grid.SetRow(buttonsGrid, 4);
+            contentGrid.Children.Add(buttonsGrid);
+
+            var statusBadge = CreateStatusBadge(applicant.Status);
+            statusBadge.HorizontalOptions = LayoutOptions.End;
+            statusBadge.VerticalOptions = LayoutOptions.Start;
+            var badgeMargin = GetResponsiveSpacing(isSmallScreen ? -8 : -10);
+            var badgeMarginRight = GetResponsiveSpacing(isSmallScreen ? -12 : -16);
+            statusBadge.Margin = new Thickness(0, badgeMargin, badgeMarginRight, 0);
+
+            contentContainer.Children.Add(contentGrid);
+            contentContainer.Children.Add(statusBadge);
+
+            mainGrid.Children.Add(leftBorder);
+            mainGrid.Children.Add(contentContainer);
+
+            cardFrame.Content = mainGrid;
+
+            return cardFrame;
+        }
+
+        private Frame CreateStatusBadge(string status)
+        {
+            var badgeColor = status == "Pending" ? Color.FromArgb("#F44336") : Color.FromArgb("#4CAF50");
+
+            var badgeFrame = new Frame
+            {
+                BackgroundColor = badgeColor,
+                Padding = GetResponsivePadding(isSmallScreen ? 12 : 18, isSmallScreen ? 6 : 8),
+                CornerRadius = (float)GetResponsiveSpacing(isSmallScreen ? 15 : 20),
+                HasShadow = false,
+                BorderColor = Colors.Transparent
+            };
+
+            var label = new Label
+            {
+                Text = status,
+                TextColor = Colors.White,
+                FontSize = GetResponsiveFontSize(isSmallScreen ? 11 : 12),
+                FontAttributes = FontAttributes.Bold,
+                HorizontalTextAlignment = TextAlignment.Center,
+                VerticalTextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, isSmallScreen ? 1 : 3, isSmallScreen ? 5 : 7, 0)
+            };
+
+            badgeFrame.Content = label;
+            return badgeFrame;
+        }
+
+        private Grid CreateActionButtonsGrid(PreVerApplicant applicant)
+        {
+            var buttonsGrid = new Grid
+            {
+                ColumnSpacing = GetResponsiveSpacing(isSmallScreen ? 8 : 12),
+                HeightRequest = GetResponsiveSpacing(isSmallScreen ? 35 : 45)
+            };
+
+            buttonsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            buttonsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var buttonHeight = GetResponsiveSpacing(isSmallScreen ? 32 : 40);
+            var iconSize = GetResponsiveSpacing(isSmallScreen ? 16 : 20);
+
+            var phoneBtn = CreateImageIconButton("call_orange.png", "#FF6B35", Colors.White, buttonHeight, iconSize, applicant);
+            var smsBtn = CreateImageIconButton("sms.png", "#FF6B35", Colors.White, buttonHeight, iconSize, applicant);
+
+            Grid.SetColumn(phoneBtn, 0);
+            Grid.SetColumn(smsBtn, 1);
+
+            buttonsGrid.Children.Add(phoneBtn);
+            buttonsGrid.Children.Add(smsBtn);
+
+            return buttonsGrid;
+        }
+
+        private Frame CreateImageIconButton(string imageSource, string tintColor, Color backgroundColor, double height, double iconSize, PreVerApplicant applicant)
+        {
+            var buttonFrame = new Frame
+            {
+                BackgroundColor = backgroundColor,
+                BorderColor = Color.FromArgb("#E0E0E0"),
+                CornerRadius = (float)GetResponsiveSpacing(6),
+                Padding = new Thickness(0),
+                HasShadow = false,
+                HeightRequest = height,
+                Content = new Image
+                {
+                    Source = imageSource,
+                    Aspect = Aspect.AspectFit,
+                    WidthRequest = iconSize,
+                    HeightRequest = iconSize,
+                    HorizontalOptions = LayoutOptions.Center,
+                    VerticalOptions = LayoutOptions.Center
+                }
+            };
+
+            var tapGesture = new TapGestureRecognizer();
+
+            if (imageSource.Contains("call_orange"))
+            {
+                tapGesture.Tapped += async (sender, e) => await OnPhoneButtonTapped(applicant);
+            }
+            else if (imageSource.Contains("sms"))
+            {
+                tapGesture.Tapped += async (sender, e) => await OnSmsButtonTapped(applicant);
+            }
+
+            buttonFrame.GestureRecognizers.Add(tapGesture);
+
+            return buttonFrame;
+        }
+
+        private async Task OnPhoneButtonTapped(PreVerApplicant applicant)
+        {
+            try
+            {
+                // Extract phone number from applicant data - you'll need to add phone field to PreVerApplicant class
+                var phoneNumber = ""; // Get from applicant.PhoneNumber once added
+
+                if (!string.IsNullOrEmpty(phoneNumber))
+                {
+                    var cleanNumber = phoneNumber.Replace(" ", "").Replace("-", "");
+                    var phoneUri = new Uri($"tel:{cleanNumber}");
+                    await Launcher.OpenAsync(phoneUri);
+                }
+                else
+                {
+                    await DisplayAlert("Error", "Phone number not available", "OK");
+                }
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Unable to open phone dialer: {ex.Message}", "OK");
+            }
+        }
+
+        private async Task OnSmsButtonTapped(PreVerApplicant applicant)
+        {
+            try
+            {
+                var shouldSend = await ShowSmsConfirmationModal();
+
+                if (shouldSend)
+                {
+                    // Extract phone number from applicant
+                    var phoneNumber = ""; // Get from applicant.PhoneNumber once added
+
+                    if (!string.IsNullOrEmpty(phoneNumber))
+                    {
+                        var message = "Dear Applicant, We tried to contact you for the Pre-Disbursement Physical Inspection of your unit. Kindly connect with us for completion of the Inspection.";
+                        var smsUri = new Uri($"sms:{phoneNumber}?body={Uri.EscapeDataString(message)}");
+                        await Launcher.OpenAsync(smsUri);
+                    }
+                    else
+                    {
+                        await DisplayAlert("Error", "Phone number not available", "OK");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Unable to send SMS: {ex.Message}", "OK");
+            }
+        }
+
+        private Task<bool> ShowSmsConfirmationModal()
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            var modal = new AbsoluteLayout
+            {
+                BackgroundColor = Color.FromArgb("#AA000000"),
+                HorizontalOptions = LayoutOptions.Fill,
+                VerticalOptions = LayoutOptions.Fill
+            };
+
+            var contentFrame = new Frame
+            {
+                BackgroundColor = Colors.White,
+                BorderColor = Color.FromArgb("#E0E0E0"),
+                CornerRadius = 15,
+                Padding = new Thickness(25),
+                WidthRequest = 340,
+                HasShadow = true
+            };
+
+            var contentStack = new StackLayout { Spacing = 20 };
+
+            // Icon at top
+            var iconLabel = new Label
+            {
+                Text = "💬",
+                FontSize = 50,
+                HorizontalOptions = LayoutOptions.Center
+            };
+
+            // Heading
+            var headingLabel = new Label
+            {
+                Text = "Send SMS Notification",
+                FontSize = 18,
+                FontAttributes = FontAttributes.Bold,
+                TextColor = Color.FromArgb("#333333"),
+                HorizontalTextAlignment = TextAlignment.Center
+            };
+
+            // Message preview
+            var messageFrame = new Frame
+            {
+                BackgroundColor = Color.FromArgb("#F5F5F5"),
+                BorderColor = Color.FromArgb("#E0E0E0"),
+                CornerRadius = 10,
+                Padding = new Thickness(15),
+                HasShadow = false
+            };
+
+            var messageLabel = new Label
+            {
+                Text = "Dear Applicant, We tried to contact you for the Pre-Disbursement Physical Inspection of your unit. Kindly connect with us for completion of the Inspection.",
+                FontSize = 14,
+                TextColor = Color.FromArgb("#333333"),
+                LineBreakMode = LineBreakMode.WordWrap
+            };
+
+            messageFrame.Content = messageLabel;
+
+            // Confirmation text
+            var confirmLabel = new Label
+            {
+                Text = "Do you want to send this SMS?",
+                FontSize = 14,
+                TextColor = Color.FromArgb("#666666"),
+                HorizontalTextAlignment = TextAlignment.Center
+            };
+
+            // Buttons
+            var buttonGrid = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitionCollection
+        {
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+        },
+                ColumnSpacing = 15
+            };
+
+            var cancelButton = new Button
+            {
+                Text = "CANCEL",
+                BackgroundColor = Color.FromArgb("#6C757D"),
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
+                HeightRequest = 45
+            };
+            cancelButton.Clicked += (s, e) =>
+            {
+                RemoveModal(modal);
+                tcs.TrySetResult(false);
+            };
+
+            var sendButton = new Button
+            {
+                Text = "SEND SMS",
+                BackgroundColor = Color.FromArgb("#4CAF50"),
+                TextColor = Colors.White,
+                FontAttributes = FontAttributes.Bold,
+                CornerRadius = 10,
+                HeightRequest = 45
+            };
+            sendButton.Clicked += (s, e) =>
+            {
+                RemoveModal(modal);
+                tcs.TrySetResult(true);
+            };
+
+            Grid.SetColumn(cancelButton, 0);
+            Grid.SetColumn(sendButton, 1);
+            buttonGrid.Children.Add(cancelButton);
+            buttonGrid.Children.Add(sendButton);
+
+            contentStack.Children.Add(iconLabel);
+            contentStack.Children.Add(headingLabel);
+            contentStack.Children.Add(messageFrame);
+            contentStack.Children.Add(confirmLabel);
+            contentStack.Children.Add(buttonGrid);
+
+            contentFrame.Content = contentStack;
+
+            AbsoluteLayout.SetLayoutBounds(contentFrame, new Rect(0.5, 0.5, AbsoluteLayout.AutoSize, AbsoluteLayout.AutoSize));
+            AbsoluteLayout.SetLayoutFlags(contentFrame, AbsoluteLayoutFlags.PositionProportional);
+
+            modal.Children.Add(contentFrame);
+
+            if (this.Content is Grid rootGrid)
+            {
+                Grid.SetRowSpan(modal, 3);
+                Grid.SetRow(modal, 0);
+                rootGrid.Children.Add(modal);
+            }
+
+            return tcs.Task;
+        }
+
+        private void RemoveModal(AbsoluteLayout modal)
+        {
+            if (this.Content is Grid rootGrid)
+            {
+                rootGrid.Children.Remove(modal);
+            }
+        }
+
+        private Grid CreateDetailRow(string label, string value)
+        {
+            var grid = new Grid();
+            var labelWidth = isSmallScreen ? 120 : (isTablet ? 180 : 150);
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(labelWidth * scaleFactor) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var baseFontSize = isSmallScreen ? 12 : (isTablet ? 16 : 14);
+
+            var labelControl = new Label
+            {
+                Text = label,
+                FontSize = GetResponsiveFontSize(baseFontSize),
+                FontAttributes = FontAttributes.None,
+                TextColor = Color.FromArgb("#666666"),
+                VerticalOptions = LayoutOptions.Start,
+                LineBreakMode = LineBreakMode.WordWrap
+            };
+
+            var valueControl = new Label
+            {
+                Text = value,
+                FontSize = GetResponsiveFontSize(baseFontSize),
+                FontAttributes = FontAttributes.None,
+                TextColor = Colors.Black,
+                VerticalOptions = LayoutOptions.Start,
+                LineBreakMode = LineBreakMode.WordWrap
+            };
+
+            Grid.SetColumn(labelControl, 0);
+            Grid.SetColumn(valueControl, 1);
+
+            grid.Children.Add(labelControl);
+            grid.Children.Add(valueControl);
+
+            return grid;
+        }
+
+        private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
+        {
+            var searchText = e.NewTextValue ?? "";
+
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                DisplayApplicants(_allApplicants);
+            }
+            else
+            {
+                var filtered = _allApplicants.Where(a =>
+                    a.Name.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                    a.Id.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                ).ToList();
+
+                DisplayApplicants(filtered);
+            }
+        }
+
+        private async void OnBackButtonClicked(object sender, EventArgs e)
+        {
+            await Navigation.PopAsync();
+        }
+
+        private double GetResponsiveFontSize(double baseSize) => baseSize * scaleFactor;
+        private double GetResponsiveSpacing(double baseSpacing) => baseSpacing * scaleFactor;
+        private Thickness GetResponsivePadding(double basePadding) => new Thickness(basePadding * scaleFactor);
+        private Thickness GetResponsivePadding(double horizontal, double vertical) => new Thickness(horizontal * scaleFactor, vertical * scaleFactor);
+    }
+}

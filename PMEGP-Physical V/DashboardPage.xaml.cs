@@ -41,6 +41,14 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
         public int Completed { get; set; }
     }
 
+    // Pre-Verification API Response
+    public class PreVerificationApiResponse
+    {
+        public int Pending { get; set; }
+        public int Completed { get; set; }
+    }
+
+
     // New class for passing data to DetailsPage
     public class DetailsPageRequest
     {
@@ -67,14 +75,18 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
     private bool _isDisposed = false;
     private readonly bool _showToastOnLoad = false;
     private bool _hasShownToast = false;
+    private bool _isPreVerificationMode = false;
+    private PreVerificationApiResponse? _preVerData = null;
     #endregion
 
     #region Constructor
-    public DashboardPage(LoginPage.LoginResponse response, bool showToast = false)
+    public DashboardPage(LoginPage.LoginResponse response, bool showToast = false, bool isPreVerMode = false, PreVerificationApiResponse? preVerData = null)
     {
         InitializeComponent();
         _loginResponse = response;
         _showToastOnLoad = showToast;
+        _isPreVerificationMode = isPreVerMode;
+        _preVerData = preVerData;
 
         // ⚠️ Development ONLY: Bypass SSL certificate validation
         var handler = new HttpClientHandler
@@ -226,7 +238,12 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
             ShowLoading();
 
             // Check login type and load appropriate data
-            if (_loginResponse.IsBankLogin)
+            // Check if Pre-Verification mode
+            if (_isPreVerificationMode && _preVerData != null)
+            {
+                MapPreVerificationDataToDashboard(_preVerData);
+            }
+            else if (_loginResponse.IsBankLogin)
             {
                 await FetchBankDataFromApiAsync();
             }
@@ -260,6 +277,29 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
         }
     }
 
+    private void MapPreVerificationDataToDashboard(PreVerificationApiResponse data)
+    {
+        if (_isDisposed)
+            return;
+
+        DashboardItems.Clear();
+
+        DashboardItems.Add(new DashboardItem
+        {
+            Title = "Pending",
+            Count = data.Pending,
+            Category = "prever_pending"
+        });
+
+        DashboardItems.Add(new DashboardItem
+        {
+            Title = "Completed",
+            Count = data.Completed,
+            Category = "prever_completed"
+        });
+
+        UserIdLabel.Text = $"{_loginResponse.UserID}";
+    }
     private void ShowLoading()
     {
         MainThread.BeginInvokeOnMainThread(() =>
@@ -548,6 +588,9 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
             "pending" => "PendingApplications",
             "completed" => "CompletedApplications",
 
+            "prever_pending" => "PreVerPending",
+            "prever_completed" => "PreVerCompleted",
+
             // Unit Login categories
             "total_reports" => "ApplicationRecieved",
             "reports_received" => "ApplicationRecieved",
@@ -629,8 +672,13 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
 
         try
         {
-            // Check if Bank Login or Unit Login
-            if (_loginResponse.IsBankLogin)
+            // Check if Pre-Verification mode
+            if (_isPreVerificationMode)
+            {
+                string status = selectedItem.Category.ToLower() == "prever_pending" ? "Pending" : "Completed";
+                await Navigation.PushAsync(new DetailsPagePreVer(status));
+            }
+            else if (_loginResponse.IsBankLogin)
             {
                 string status = selectedItem.Category.ToLower() == "pending" ? "Pending" : "Completed";
                 await Navigation.PushAsync(new DetailsPageBL(_loginResponse.IFSC_Code ?? "", status));
@@ -655,6 +703,40 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
                     "OK");
             }
         }
+    }
+
+    private async void OnPreVerificationTapped(object sender, EventArgs e)
+    {
+        try
+        {
+            // TODO: Replace with actual API call
+            var preVerData = await FetchPreVerificationDataAsync();
+
+            var dashboardPage = new DashboardPage(
+                _loginResponse,
+                showToast: false,
+                isPreVerMode: true,
+                preVerData: preVerData
+            );
+
+            await Navigation.PushAsync(dashboardPage);
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Error", $"Failed to load pre-verification data: {ex.Message}", "OK");
+        }
+    }
+
+    private async Task<DashboardPage.PreVerificationApiResponse> FetchPreVerificationDataAsync()
+    {
+        // Hard-coded response for now
+        await Task.Delay(500); // Simulate network call
+
+        return new DashboardPage.PreVerificationApiResponse
+        {
+            Pending = 12,
+            Completed = 8
+        };
     }
 
     private async void OnNewLoanTapped(object sender, EventArgs e)
@@ -687,8 +769,16 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
             if (_isDisposed)
                 return;
 
-            // Simply go back to PrePostVerificationPage without asking
-            await Navigation.PopAsync();
+            // If in Pre-Verification mode, go back to dashboard
+            if (_isPreVerificationMode)
+            {
+                await Navigation.PopAsync();
+            }
+            else
+            {
+                // Default behavior for other modes
+                await Navigation.PopAsync();
+            }
         });
 
         return true; // Prevent default back button behavior
