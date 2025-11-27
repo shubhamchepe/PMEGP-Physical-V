@@ -237,14 +237,72 @@ public partial class PrePostVerificationPage : ContentPage, INotifyPropertyChang
 
     private async Task<DashboardPage.PreVerificationApiResponse> FetchPreVerificationDataAsync()
     {
-        // Hard-coded response for now
-        await Task.Delay(500); // Simulate network call
-
-        return new DashboardPage.PreVerificationApiResponse
+        try
         {
-            Pending = 12,
-            Completed = 8
-        };
+            const string API_URL = "https://115.124.125.153/MobileApp/GetPrePostalVerificationDashboardData";
+
+            // ?? Development ONLY: Bypass SSL certificate validation
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback =
+                    (message, cert, chain, sslPolicyErrors) => true
+            };
+
+            using var httpClient = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+
+            var requestPayload = new
+            {
+                PhysicalVeriID = _loginResponse.PhysicalVeriID,
+                userName = "Test"
+            };
+
+            var json = System.Text.Json.JsonSerializer.Serialize(requestPayload);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await httpClient.PostAsync(API_URL, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonString = await response.Content.ReadAsStringAsync();
+
+                if (string.IsNullOrEmpty(jsonString))
+                {
+                    throw new Exception("Empty response from server");
+                }
+
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var apiResponse = System.Text.Json.JsonSerializer.Deserialize<DashboardPage.PreVerificationApiWrapper>(jsonString, options);
+
+                if (apiResponse?.Success == true && apiResponse.Data != null)
+                {
+                    return new DashboardPage.PreVerificationApiResponse
+                    {
+                        Pending = apiResponse.Data.PendingCount,
+                        Completed = apiResponse.Data.CompletedCountParam
+                    };
+                }
+                else
+                {
+                    throw new Exception("API returned unsuccessful response");
+                }
+            }
+            else
+            {
+                throw new Exception($"HTTP Error: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Pre-verification API error: {ex.Message}");
+            throw;
+        }
     }
 
     private async void OnLogoutClicked(object sender, EventArgs e)

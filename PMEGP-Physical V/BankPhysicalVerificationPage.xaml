@@ -30,7 +30,7 @@
                     Grid.Column="0"/>
 
             <Label x:Name="HeaderTitle"
-                   Text="Bank Pre-Sanction Verification"
+                   Text="Pre Disbursement Inspection"
                    TextColor="White"
                    FontSize="16"
                    FontAttributes="Bold"

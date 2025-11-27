@@ -41,7 +41,7 @@
 
             <!-- Title Label -->
             <Label Grid.Column="1"
-           Text="Physical Verification" 
+           Text="Pre Disbursement Inspection" 
            TextColor="White" 
            FontSize="16" 
            FontAttributes="Bold" 

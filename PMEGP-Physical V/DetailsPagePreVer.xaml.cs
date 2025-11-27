@@ -12,6 +12,23 @@ namespace PMEGP_Physical_V
         public string PhoneNumber { get; set; } = string.Empty; // ADD THIS LINE
     }
 
+    public class PreVerApiResponse
+    {
+        public bool Success { get; set; }
+        public List<PreVerApiData>? Data { get; set; }
+    }
+
+    public class PreVerApiData
+    {
+        public int ApplID { get; set; }
+        public string? ApplCode { get; set; }
+        public string? ApplName { get; set; }
+        public string? UnitAddress { get; set; }
+        public string? MobileNo1 { get; set; }
+        public string? FinalSubDate { get; set; }
+        // Add other fields as needed from API response
+    }
+
     public partial class DetailsPagePreVer : ContentPage
     {
         private readonly string _status;
@@ -21,19 +38,34 @@ namespace PMEGP_Physical_V
         private bool isSmallScreen;
         private bool isTablet;
         private List<PreVerApplicant> _allApplicants = new List<PreVerApplicant>();
+        private readonly HttpClient _httpClient;
 
         public DetailsPagePreVer(string status)
         {
             InitializeComponent();
             _status = status;
 
+            // ⚠️ Development ONLY: Bypass SSL certificate validation
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback =
+                    (message, cert, chain, sslPolicyErrors) => true
+            };
+
+            _httpClient = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+
             InitializeResponsiveDesign();
-            LoadHardcodedData();
 
             if (SearchEntry != null)
             {
                 SearchEntry.TextChanged += OnSearchTextChanged;
             }
+
+            // Load data from API instead of hardcoded
+            LoadDataFromApi();
         }
 
         private void InitializeResponsiveDesign()
@@ -53,40 +85,95 @@ namespace PMEGP_Physical_V
             isTablet = screenWidth >= 600;
         }
 
-        private void LoadHardcodedData()
+        private async void LoadDataFromApi()
         {
-            _allApplicants = new List<PreVerApplicant>
-    {
-        new PreVerApplicant
-        {
-            Id = "MH001",
-            Name = "Rajesh Kumar",
-            Address = "123 Main Street, Pune, Maharashtra, 411001",
-            DateOfSubmission = "15-01-2025",
-            Status = _status == "Pending" ? "Pending" : "Completed",
-            PhoneNumber = "9876543210" // ADD PHONE NUMBER
-        },
-        new PreVerApplicant
-        {
-            Id = "MH002",
-            Name = "Priya Sharma",
-            Address = "456 Park Avenue, Mumbai, Maharashtra, 400001",
-            DateOfSubmission = "18-01-2025",
-            Status = _status == "Pending" ? "Pending" : "Completed",
-            PhoneNumber = "9876543211" // ADD PHONE NUMBER
-        },
-        new PreVerApplicant
-        {
-            Id = "MH003",
-            Name = "Amit Patel",
-            Address = "789 Garden Road, Nagpur, Maharashtra, 440001",
-            DateOfSubmission = "20-01-2025",
-            Status = _status == "Pending" ? "Pending" : "Completed",
-            PhoneNumber = "9876543212" // ADD PHONE NUMBER
-        }
-    };
+            try
+            {
+                const string API_URL = "https://115.124.125.153/MobileApp/GetPrePostalVerificationList";
 
-            DisplayApplicants(_allApplicants);
+                var requestPayload = new
+                {
+                    userName = "Test",
+                    status = _status.ToLower() // "pending" or "completed"
+                };
+
+                var json = System.Text.Json.JsonSerializer.Serialize(requestPayload);
+                var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+                var response = await _httpClient.PostAsync(API_URL, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var jsonString = await response.Content.ReadAsStringAsync();
+
+                    if (string.IsNullOrEmpty(jsonString))
+                    {
+                        await DisplayAlert("Error", "Empty response from server", "OK");
+                        return;
+                    }
+
+                    var options = new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    };
+
+                    var apiResponse = System.Text.Json.JsonSerializer.Deserialize<PreVerApiResponse>(jsonString, options);
+
+                    if (apiResponse?.Success == true && apiResponse.Data != null)
+                    {
+                        _allApplicants = apiResponse.Data.Select(item => new PreVerApplicant
+                        {
+                            Id = item.ApplCode ?? "",
+                            Name = item.ApplName ?? "",
+                            Address = item.UnitAddress ?? "",
+                            DateOfSubmission = FormatDate(item.FinalSubDate),
+                            Status = _status,
+                            PhoneNumber = item.MobileNo1 ?? ""
+                        }).ToList();
+
+                        DisplayApplicants(_allApplicants);
+                    }
+                    else
+                    {
+                        await DisplayAlert("Error", "Failed to load data", "OK");
+                    }
+                }
+                else
+                {
+                    await DisplayAlert("Error", $"HTTP Error: {response.StatusCode}", "OK");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"API Error: {ex.Message}");
+                await DisplayAlert("Error", $"Failed to load data: {ex.Message}", "OK");
+            }
+        }
+
+        private string FormatDate(string? dateString)
+        {
+            if (string.IsNullOrEmpty(dateString))
+                return "N/A";
+
+            try
+            {
+                // Handle /Date(timestamp)/ format
+                if (dateString.StartsWith("/Date("))
+                {
+                    var timestamp = dateString.Replace("/Date(", "").Replace(")/", "");
+                    if (long.TryParse(timestamp, out long milliseconds))
+                    {
+                        var epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                        var date = epoch.AddMilliseconds(milliseconds);
+                        return date.ToString("dd-MM-yyyy");
+                    }
+                }
+                return dateString;
+            }
+            catch
+            {
+                return "N/A";
+            }
         }
 
         private void DisplayApplicants(List<PreVerApplicant> applicants)
@@ -281,8 +368,7 @@ namespace PMEGP_Physical_V
         {
             try
             {
-                // Extract phone number from applicant data - you'll need to add phone field to PreVerApplicant class
-                var phoneNumber = ""; // Get from applicant.PhoneNumber once added
+                var phoneNumber = applicant.PhoneNumber; // Now uses actual data
 
                 if (!string.IsNullOrEmpty(phoneNumber))
                 {
@@ -309,8 +395,7 @@ namespace PMEGP_Physical_V
 
                 if (shouldSend)
                 {
-                    // Extract phone number from applicant
-                    var phoneNumber = ""; // Get from applicant.PhoneNumber once added
+                    var phoneNumber = applicant.PhoneNumber; // Now uses actual data
 
                     if (!string.IsNullOrEmpty(phoneNumber))
                     {
@@ -328,6 +413,12 @@ namespace PMEGP_Physical_V
             {
                 await DisplayAlert("Error", $"Unable to send SMS: {ex.Message}", "OK");
             }
+        }
+
+        protected override void OnDisappearing()
+        {
+            base.OnDisappearing();
+            _httpClient?.Dispose();
         }
 
         private Task<bool> ShowSmsConfirmationModal()

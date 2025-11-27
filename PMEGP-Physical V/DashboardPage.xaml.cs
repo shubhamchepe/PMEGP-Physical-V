@@ -48,6 +48,18 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
         public int Completed { get; set; }
     }
 
+    // Wrapper for API response
+    public class PreVerificationApiWrapper
+    {
+        public bool Success { get; set; }
+        public PreVerificationData? Data { get; set; }
+    }
+
+    public class PreVerificationData
+    {
+        public int CompletedCountParam { get; set; }
+        public int PendingCount { get; set; }
+    }
 
     // New class for passing data to DetailsPage
     public class DetailsPageRequest
@@ -729,14 +741,60 @@ public partial class DashboardPage : ContentPage, INotifyPropertyChanged
 
     private async Task<DashboardPage.PreVerificationApiResponse> FetchPreVerificationDataAsync()
     {
-        // Hard-coded response for now
-        await Task.Delay(500); // Simulate network call
-
-        return new DashboardPage.PreVerificationApiResponse
+        try
         {
-            Pending = 12,
-            Completed = 8
-        };
+            const string API_URL = "https://115.124.125.153/MobileApp/GetPrePostalVerificationDashboardData";
+
+            var requestPayload = new
+            {
+                PhysicalVeriID = _loginResponse.PhysicalVeriID,
+                userName = "Test"
+            };
+
+            var json = JsonSerializer.Serialize(requestPayload);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync(API_URL, content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonString = await response.Content.ReadAsStringAsync();
+
+                if (string.IsNullOrEmpty(jsonString))
+                {
+                    throw new Exception("Empty response from server");
+                }
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var apiResponse = JsonSerializer.Deserialize<PreVerificationApiWrapper>(jsonString, options);
+
+                if (apiResponse?.Success == true && apiResponse.Data != null)
+                {
+                    return new PreVerificationApiResponse
+                    {
+                        Pending = apiResponse.Data.PendingCount,
+                        Completed = apiResponse.Data.CompletedCountParam
+                    };
+                }
+                else
+                {
+                    throw new Exception("API returned unsuccessful response");
+                }
+            }
+            else
+            {
+                throw new Exception($"HTTP Error: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Pre-verification API error: {ex.Message}");
+            throw;
+        }
     }
 
     private async void OnNewLoanTapped(object sender, EventArgs e)

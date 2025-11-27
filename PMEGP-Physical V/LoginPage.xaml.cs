@@ -250,7 +250,7 @@ public partial class LoginPage : ContentPage
             UnitLoginTabLabel.TextColor = Color.FromArgb("#FF6B35");
 
             LoginButton.Text = "BANK LOGIN";
-            HeadingLabel.Text = "Bank Pre-Verification Login";
+            HeadingLabel.Text = "Pre-Sanction Inspection";
         }
         else
         {
