@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage x:Class="PMEGP_Physical_V.CallLogDetailsPage"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             Title="Call Log Details"
+             BackgroundColor="White"
+             NavigationPage.HasNavigationBar="False">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header Section -->
+        <Grid Grid.Row="0" 
+              BackgroundColor="#4CAF50" 
+              Padding="15,5,15,5"
+              HeightRequest="50">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Button x:Name="BackButton"
+                    Grid.Column="0"
+                    Text="‹"
+                    TextColor="White"
+                    BackgroundColor="Transparent"
+                    FontSize="28"
+                    FontAttributes="Bold"
+                    WidthRequest="40"
+                    HeightRequest="40"
+                    Padding="0"
+                    Margin="0"
+                    VerticalOptions="Center"
+                    HorizontalOptions="Start"
+                    Clicked="OnBackButtonClicked" />
+
+            <Label Grid.Column="1"
+                   Text="Call Log Details" 
+                   TextColor="White" 
+                   FontSize="16" 
+                   FontAttributes="Bold" 
+                   HorizontalOptions="Start"
+                   VerticalOptions="Center"
+                   Margin="10,0,0,0" />
+        </Grid>
+
+        <!-- Applicant Info Section -->
+        <Frame Grid.Row="1" 
+               BackgroundColor="White"
+               BorderColor="#E0E0E0"
+               CornerRadius="0"
+               Padding="15"
+               HasShadow="False">
+            <StackLayout Spacing="8">
+                <Label x:Name="ApplicantNameLabel"
+                       FontSize="16"
+                       FontAttributes="Bold"
+                       TextColor="#333333" />
+                <Label x:Name="PhoneNumberLabel"
+                       FontSize="14"
+                       TextColor="#666666" />
+                <Label x:Name="TotalCallsLabel"
+                       FontSize="12"
+                       TextColor="#FF6B35"
+                       FontAttributes="Bold" />
+            </StackLayout>
+        </Frame>
+
+        <!-- Call Logs List -->
+        <Frame Grid.Row="2" 
+               BackgroundColor="#E8F5E8" 
+               Padding="10,15,10,15"
+               CornerRadius="0"
+               HasShadow="False">
+            <ScrollView>
+                <Grid x:Name="CallLogsContainer" 
+                      RowSpacing="10">
+                </Grid>
+            </ScrollView>
+        </Frame>
+    </Grid>
+</ContentPage>

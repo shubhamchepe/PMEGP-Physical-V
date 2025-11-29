@@ -28,6 +28,8 @@
 		</array>
 		<key>XSAppIconAssets</key>
 		<string>Assets.xcassets/appicon.appiconset</string>
+		<key>NSContactsUsageDescription</key>
+		<string>This app requires access to call logs to display call history with applicants.</string>
 
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>This app needs access to location for geo-tagging units.</string>

@@ -39,6 +39,7 @@ namespace PMEGP_Physical_V
         private bool isTablet;
         private List<PreVerApplicant> _allApplicants = new List<PreVerApplicant>();
         private readonly HttpClient _httpClient;
+        private List<int> _applIds = new List<int>();
 
         public DetailsPagePreVer(string status)
         {
@@ -131,6 +132,8 @@ namespace PMEGP_Physical_V
                             PhoneNumber = item.MobileNo1 ?? ""
                         }).ToList();
 
+                        _applIds = apiResponse.Data.Select(item => item.ApplID).ToList();
+
                         DisplayApplicants(_allApplicants);
                     }
                     else
@@ -207,6 +210,17 @@ namespace PMEGP_Physical_V
                 HasShadow = false
             };
 
+            var tapGesture = new TapGestureRecognizer();
+            tapGesture.Tapped += async (s, e) =>
+            {
+                var index = _allApplicants.IndexOf(applicant);
+                if (index >= 0 && index < _applIds.Count)
+                {
+                    await Navigation.PushAsync(new InspectionDetailsPage(_applIds[index]));
+                }
+            };
+            cardFrame.GestureRecognizers.Add(tapGesture);
+
             var mainGrid = new Grid();
             var borderWidth = GetResponsiveSpacing(isSmallScreen ? 6 : 8);
             mainGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(borderWidth) });
@@ -229,7 +243,7 @@ namespace PMEGP_Physical_V
                 RowSpacing = GetResponsiveSpacing(isSmallScreen ? 6 : 8)
             };
 
-            for (int i = 0; i < 5; i++) // Changed from 4 to 5 to accommodate buttons
+            for (int i = 0; i < 5; i++)
             {
                 contentGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             }
@@ -249,7 +263,6 @@ namespace PMEGP_Physical_V
             contentGrid.Children.Add(addressRow);
             contentGrid.Children.Add(dateRow);
 
-            // Add action buttons
             var buttonsGrid = CreateActionButtonsGrid(applicant);
             buttonsGrid.Margin = new Thickness(0, GetResponsiveSpacing(isSmallScreen ? 10 : 15), 0, 0);
             Grid.SetRow(buttonsGrid, 4);
@@ -311,16 +324,20 @@ namespace PMEGP_Physical_V
 
             buttonsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             buttonsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            buttonsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var buttonHeight = GetResponsiveSpacing(isSmallScreen ? 32 : 40);
             var iconSize = GetResponsiveSpacing(isSmallScreen ? 16 : 20);
 
-            var phoneBtn = CreateImageIconButton("call_orange.png", "#FF6B35", Colors.White, buttonHeight, iconSize, applicant);
+            var callBtn = CreateImageIconButton("call_orange.png", "#FF6B35", Colors.White, buttonHeight, iconSize, applicant);
+            var phoneBtn = CreateImageIconButton("call_logs.png", "#FF6B35", Colors.White, buttonHeight, iconSize, applicant);
             var smsBtn = CreateImageIconButton("sms.png", "#FF6B35", Colors.White, buttonHeight, iconSize, applicant);
 
-            Grid.SetColumn(phoneBtn, 0);
-            Grid.SetColumn(smsBtn, 1);
+            Grid.SetColumn(callBtn, 0);
+            Grid.SetColumn(phoneBtn, 1);
+            Grid.SetColumn(smsBtn, 2);
 
+            buttonsGrid.Children.Add(callBtn);
             buttonsGrid.Children.Add(phoneBtn);
             buttonsGrid.Children.Add(smsBtn);
 
@@ -350,7 +367,11 @@ namespace PMEGP_Physical_V
 
             var tapGesture = new TapGestureRecognizer();
 
-            if (imageSource.Contains("call_orange"))
+            if (imageSource.Contains("call_orange.png") && !imageSource.Contains("call_logs"))
+            {
+                tapGesture.Tapped += async (sender, e) => await OnCallButtonTapped(applicant);
+            }
+            else if (imageSource.Contains("call_logs"))
             {
                 tapGesture.Tapped += async (sender, e) => await OnPhoneButtonTapped(applicant);
             }
@@ -364,27 +385,145 @@ namespace PMEGP_Physical_V
             return buttonFrame;
         }
 
-        private async Task OnPhoneButtonTapped(PreVerApplicant applicant)
+        private async Task OnCallButtonTapped(PreVerApplicant applicant)
         {
             try
             {
-                var phoneNumber = applicant.PhoneNumber; // Now uses actual data
+                var phoneNumber = applicant.PhoneNumber;
 
-                if (!string.IsNullOrEmpty(phoneNumber))
+                if (string.IsNullOrEmpty(phoneNumber))
                 {
-                    var cleanNumber = phoneNumber.Replace(" ", "").Replace("-", "");
-                    var phoneUri = new Uri($"tel:{cleanNumber}");
-                    await Launcher.OpenAsync(phoneUri);
+                    await DisplayAlert("Error", "Phone number not available", "OK");
+                    return;
+                }
+
+                if (PhoneDialer.IsSupported)
+                {
+                    PhoneDialer.Open(phoneNumber);
                 }
                 else
                 {
-                    await DisplayAlert("Error", "Phone number not available", "OK");
+                    await DisplayAlert("Not Supported", "Phone dialer is not supported on this device", "OK");
                 }
             }
             catch (Exception ex)
             {
-                await DisplayAlert("Error", $"Unable to open phone dialer: {ex.Message}", "OK");
+                await DisplayAlert("Error", $"Unable to open dialer: {ex.Message}", "OK");
             }
+        }
+
+        private async Task OnPhoneButtonTapped(PreVerApplicant applicant)
+        {
+            try
+            {
+                var phoneNumber = applicant.PhoneNumber;
+
+                if (string.IsNullOrEmpty(phoneNumber))
+                {
+                    await DisplayAlert("Error", "Phone number not available", "OK");
+                    return;
+                }
+
+                // Request call log permissions
+                var status = await Permissions.RequestAsync<CallLogPermission>();
+
+                if (status != PermissionStatus.Granted)
+                {
+                    await DisplayAlert("Permission Denied", "Call log access is required to view call history.", "OK");
+                    return;
+                }
+
+                // Fetch call logs for this phone number
+                var callLogs = await GetCallLogsForNumber(phoneNumber);
+
+                if (callLogs == null || callLogs.Count == 0)
+                {
+                    await DisplayAlert("No Call Logs", $"No call logs found for {phoneNumber}", "OK");
+                    return;
+                }
+
+                // Navigate to call log details page
+                await Navigation.PushAsync(new CallLogDetailsPage(applicant, callLogs));
+            }
+            catch (Exception ex)
+            {
+                await DisplayAlert("Error", $"Unable to fetch call logs: {ex.Message}", "OK");
+            }
+        }
+
+        private async Task<List<CallLogEntry>> GetCallLogsForNumber(string phoneNumber)
+        {
+            var callLogs = new List<CallLogEntry>();
+
+            try
+            {
+                var cleanNumber = phoneNumber.Replace(" ", "").Replace("-", "").Replace("+", "");
+
+#if ANDROID
+        var contentResolver = Android.App.Application.Context.ContentResolver;
+        var uri = Android.Provider.CallLog.Calls.ContentUri;
+        
+        string[] projection = new string[]
+        {
+            Android.Provider.CallLog.Calls.Number,
+            Android.Provider.CallLog.Calls.Type,
+            Android.Provider.CallLog.Calls.Date,
+            Android.Provider.CallLog.Calls.Duration
+        };
+
+        var cursor = contentResolver.Query(uri, projection, null, null, Android.Provider.CallLog.Calls.Date + " DESC");
+
+        if (cursor != null && cursor.MoveToFirst())
+        {
+            do
+            {
+                var number = cursor.GetString(cursor.GetColumnIndex(Android.Provider.CallLog.Calls.Number));
+                var cleanLogNumber = number?.Replace(" ", "").Replace("-", "").Replace("+", "") ?? "";
+
+                if (cleanLogNumber.Contains(cleanNumber) || cleanNumber.Contains(cleanLogNumber))
+                {
+                    var type = cursor.GetInt(cursor.GetColumnIndex(Android.Provider.CallLog.Calls.Type));
+                    var dateMillis = cursor.GetLong(cursor.GetColumnIndex(Android.Provider.CallLog.Calls.Date));
+                    var duration = cursor.GetInt(cursor.GetColumnIndex(Android.Provider.CallLog.Calls.Duration));
+
+                    var callType = type switch
+                    {
+                        (int)Android.Provider.CallType.Incoming => "Incoming",
+                        (int)Android.Provider.CallType.Outgoing => "Outgoing",
+                        (int)Android.Provider.CallType.Missed => "Missed",
+                        (int)Android.Provider.CallType.Rejected => "Rejected",
+                        _ => "Unknown"
+                    };
+
+                    var dateTime = DateTimeOffset.FromUnixTimeMilliseconds(dateMillis).LocalDateTime;
+
+                    callLogs.Add(new CallLogEntry
+                    {
+                        PhoneNumber = number,
+                        CallType = callType,
+                        DateTime = dateTime,
+                        Duration = duration
+                    });
+                }
+            }
+            while (cursor.MoveToNext());
+
+            cursor.Close();
+        }
+#elif IOS
+        // iOS implementation using CallKit
+        var callObserver = new CallKit.CXCallObserver();
+        // Note: iOS doesn't provide direct access to call logs due to privacy restrictions
+        // This is a placeholder - actual implementation would require CallKit framework
+        await DisplayAlert("iOS Limitation", "iOS does not provide direct access to call logs. Please use Android device.", "OK");
+#endif
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error fetching call logs: {ex.Message}");
+            }
+
+            return callLogs;
         }
 
         private async Task OnSmsButtonTapped(PreVerApplicant applicant)
@@ -634,5 +773,6 @@ namespace PMEGP_Physical_V
         private double GetResponsiveSpacing(double baseSpacing) => baseSpacing * scaleFactor;
         private Thickness GetResponsivePadding(double basePadding) => new Thickness(basePadding * scaleFactor);
         private Thickness GetResponsivePadding(double horizontal, double vertical) => new Thickness(horizontal * scaleFactor, vertical * scaleFactor);
+
     }
 }
